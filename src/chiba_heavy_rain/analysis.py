@@ -301,24 +301,20 @@ def _article_comparison_table(period_results: pd.DataFrame) -> pd.DataFrame:
 def _article_rainfall_projection_table(period_results: pd.DataFrame) -> pd.DataFrame:
     """Project article grid rainfall onto the corresponding gauge GEV curve."""
     rows: list[dict[str, object]] = []
-    for station, article_location in ARTICLE_STATION_LABELS.items():
+    for station, analyzed_rainfall in ARTICLE_ANALYZED_RAINFALL_MM.items():
         row = period_results.loc[period_results["station"] == station].iloc[0]
-        analyzed_rainfall = ARTICLE_ANALYZED_RAINFALL_MM.get(station)
-        projected_period = np.nan
-        if analyzed_rainfall is not None:
-            fit = GEVFit(
-                shape_xi=float(row["shape_xi"]),
-                location=float(row["location"]),
-                scale=float(row["scale"]),
-            )
-            projected_period = return_period(analyzed_rainfall, fit)
+        fit = GEVFit(
+            shape_xi=float(row["shape_xi"]),
+            location=float(row["location"]),
+            scale=float(row["scale"]),
+        )
         rows.append(
             {
                 "地点": station,
-                "元記事の地域名": article_location.removeprefix("記事地域："),
-                "アメダス24時間降水量（mm）": float(row["event_24h_mm"]),
-                "記事の解析雨量（mm）": analyzed_rainfall,
-                "解析雨量を観測GEV曲線に当てはめた確率年": projected_period,
+                "AMeDAS（mm）": float(row["event_24h_mm"]),
+                "解析雨量（mm）": analyzed_rainfall,
+                "観測GEV換算": return_period(analyzed_rainfall, fit),
+                "元記事": ARTICLE_RETURN_PERIODS[station],
             }
         )
     return pd.DataFrame(rows)
@@ -592,10 +588,9 @@ def _write_report(
             comparison_rows.append("| " + " | ".join(str(value) for value in row) + " |")
     if article_rainfall_projection is not None:
         for row in article_rainfall_projection.itertuples(index=False):
-            analyzed = "—" if pd.isna(row[3]) else f"{float(row[3]):.1f}"
-            projected = "—" if pd.isna(row[4]) else _format_period(float(row[4]))
             projection_rows.append(
-                f"| {row[0]} | {row[1]} | {float(row[2]):.1f} | {analyzed} | {projected} |"
+                f"| {row[0]} | {float(row[1]):.1f} | {float(row[2]):.1f} | "
+                f"{_format_period(float(row[3]))} | {row[4]} |"
             )
     text = f"""# 令和8年8月千葉豪雨：地上観測に基づく24時間雨量の確率年
 
@@ -625,13 +620,13 @@ def _write_report(
 |---|---:|---|---:|
 {chr(10).join(comparison_rows)}
 
-### 記事の解析雨量を観測GEV曲線で評価した場合
+### 雨量差を考慮した比較
 
-| 地点 | 元記事の地域名 | アメダス24時間降水量（mm） | 記事の解析雨量（mm） | 解析雨量を観測GEV曲線に当てはめた確率年 |
-|---|---|---:|---:|---:|
+| 地点 | AMeDAS（mm） | 解析雨量（mm） | 観測GEV換算 | 元記事 |
+|---|---:|---:|---:|---:|
 {chr(10).join(projection_rows)}
 
-記事本文に地域別の解析雨量が明記された千葉と茂原のみを計算した。千葉市緑区～市原市東部の574.2 mmなどは、今回の4地点に直接対応するアメダス観測所がないため含めていない。解析雨量は格子値、GEV曲線は地点観測値から求めたものであり、この計算も空間代表性の異なる値を組み合わせた参考評価である。
+「観測GEV換算」は、記事の解析雨量を1976～2014年のAMeDAS観測から推定したGEV曲線に代入した値である。記事に解析雨量が明記され、地点との対応が可能な千葉と茂原のみを示した。格子値と地点値を組み合わせた参考値であり、対応地点のない574.2 mmは含めていない。
 
 記事の解析雨量を代入した確率年は、千葉で271年、茂原で115年となった。茂原では解析雨量がアメダス雨量より80.0 mm大きいため確率年も長くなるが、それでも元記事の約277年より短い。千葉も元記事の約574年に対して約271年であり、雨量値の違いだけでは元記事との確率年の差を説明できない。
 
