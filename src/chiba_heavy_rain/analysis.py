@@ -81,7 +81,12 @@ def _plot_summary(results: pd.DataFrame, output: Path) -> None:
     plt.close(fig)
 
 
-def _plot_return_levels(series: dict[str, pd.DataFrame], results: pd.DataFrame, output: Path) -> None:
+def _plot_return_levels(
+    series: dict[str, pd.DataFrame],
+    results: pd.DataFrame,
+    output: Path,
+    title: str = "Observed annual maxima and stationary GEV fits",
+) -> None:
     eligible = results.loc[results["eligible"]].sort_values("station")
     ncols = 3
     nrows = math.ceil(len(eligible) / ncols)
@@ -107,7 +112,15 @@ def _plot_return_levels(series: dict[str, pd.DataFrame], results: pd.DataFrame, 
         )
         ax.set_xscale("log")
         ax.set_xlim(1, 1e5)
-        ax.set_title(f"{station}  n={int(row['n_years'])} ({int(row['start_year'])}–2025)")
+        # Keep short-record shape estimates from making the observed range unreadable.
+        # The fitted curve may leave the panel at long return periods; that behavior is
+        # itself a warning about extrapolation instability.
+        observed_cap = max(float(np.max(ordered)), float(row["event_24h_mm"]))
+        ax.set_ylim(0, observed_cap * 1.35)
+        ax.set_title(
+            f"{station}  n={int(row['n_years'])} "
+            f"({int(row['start_year'])}–{int(row['end_year'])})"
+        )
         ax.set_xlabel("Return period (years)")
         ax.set_ylabel("24-hour rainfall (mm)")
         ax.grid(which="both", alpha=0.2)
@@ -117,8 +130,88 @@ def _plot_return_levels(series: dict[str, pd.DataFrame], results: pd.DataFrame, 
     handles, labels = axes.ravel()[0].get_legend_handles_labels()
     if len(unused_axes):
         unused_axes[0].legend(handles, labels, loc="center", frameon=False)
-    fig.suptitle("Observed annual maxima and stationary GEV fits", y=0.998, fontsize=15)
+    fig.suptitle(title, y=0.998, fontsize=15)
     fig.tight_layout(rect=(0, 0, 1, 0.99))
+    fig.savefig(output)
+    plt.close(fig)
+
+
+def _historical_period_results(
+    results: pd.DataFrame,
+    annual: pd.DataFrame,
+    start_year: int = 1976,
+    end_year: int = 2014,
+) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+    """Fit the same stations over the 39 years centered on 1995.
+
+    This deliberately applies no usable/quality filter to numeric annual maxima,
+    as requested. It also does not re-screen stations by record length.
+    """
+    rows: list[dict[str, object]] = []
+    series: dict[str, pd.DataFrame] = {}
+    for station_row in results.loc[results["eligible"]].itertuples():
+        frame = annual.loc[
+            (annual["station"] == station_row.station)
+            & annual["year"].between(start_year, end_year)
+            & annual["max_24h_mm"].notna()
+        ].sort_values("year")
+        values = frame["max_24h_mm"].to_numpy(float)
+        fit = fit_gev(values)
+        event_value = float(station_row.event_24h_mm)
+        rows.append(
+            {
+                "station": station_row.station,
+                "block_no": station_row.block_no,
+                "start_year": int(frame["year"].min()),
+                "end_year": int(frame["year"].max()),
+                "n_years": len(frame),
+                "eligible": True,
+                "window_basis": "inferred_from_article_not_confirmed_by_source_description",
+                "event_24h_mm": event_value,
+                "historical_max_mm": float(values.max()),
+                "shape_xi": fit.shape_xi,
+                "location": fit.location,
+                "scale": fit.scale,
+                "return_period_years": return_period(event_value, fit),
+            }
+        )
+        series[str(station_row.station)] = frame.copy()
+    return pd.DataFrame(rows), series
+
+
+def _plot_period_comparison(
+    current: pd.DataFrame, historical: pd.DataFrame, output: Path
+) -> None:
+    merged = current.loc[current["eligible"], ["station", "return_period_years"]].merge(
+        historical[["station", "return_period_years"]],
+        on="station",
+        suffixes=("_through_2025", "_1976_2014"),
+    )
+    merged = merged.sort_values("return_period_years_1976_2014")
+    y = np.arange(len(merged))
+    fig, ax = plt.subplots(figsize=(9, max(5, 0.48 * len(merged))))
+    ax.scatter(
+        merged["return_period_years_through_2025"],
+        y - 0.12,
+        label="Fit through 2025",
+        color="#777777",
+        s=35,
+    )
+    ax.scatter(
+        merged["return_period_years_1976_2014"],
+        y + 0.12,
+        label="Inferred 1976–2014 fit (exact WNI window undisclosed)",
+        color="#c23b22",
+        marker="D",
+        s=38,
+    )
+    ax.set_yticks(y, merged["station"])
+    ax.set_xscale("log")
+    ax.set_xlabel("Return period of the August 2026 observed value (years; log scale)")
+    ax.set_title("Effect of an article-implied historical window")
+    ax.grid(axis="x", which="both", alpha=0.25)
+    ax.legend(frameon=False)
+    fig.tight_layout()
     fig.savefig(output)
     plt.close(fig)
 
@@ -186,13 +279,23 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
 
     results = pd.DataFrame(station_results)
     results.to_csv(results_dir / "station_return_periods.csv", index=False)
-    pd.concat(all_annual, ignore_index=True).to_csv(
-        results_dir / "annual_max_24h.csv", index=False
-    )
+    annual_frame = pd.concat(all_annual, ignore_index=True)
+    annual_frame.to_csv(results_dir / "annual_max_24h.csv", index=False)
+    period_results, period_series = _historical_period_results(results, annual_frame)
+    period_results.to_csv(results_dir / "historical_1976_2014_return_periods.csv", index=False)
     _configure_plotting()
     _plot_summary(results, results_dir / "return_period_summary.png")
     _plot_return_levels(historical_series, results, results_dir / "return_level_diagnostics.png")
-    _write_report(results, results_dir / "report.md", bootstrap_samples)
+    _plot_return_levels(
+        period_series,
+        period_results,
+        results_dir / "historical_1976_2014_return_levels.png",
+        title="GEV fits for inferred 1976–2014 window (not specified by source metadata)",
+    )
+    _plot_period_comparison(
+        results, period_results, results_dir / "historical_period_comparison.png"
+    )
+    _write_report(results, results_dir / "report.md", bootstrap_samples, period_results)
     return results
 
 
@@ -207,16 +310,32 @@ def render_existing(results_dir: Path, bootstrap_samples: int) -> pd.DataFrame:
             & annual["year"].between(int(row.start_year), 2025)
             & annual["usable"]
         ].copy()
+    period_results, period_series = _historical_period_results(results, annual)
+    period_results.to_csv(results_dir / "historical_1976_2014_return_periods.csv", index=False)
     _configure_plotting()
     _plot_summary(results, results_dir / "return_period_summary.png")
     _plot_return_levels(
         historical_series, results, results_dir / "return_level_diagnostics.png"
     )
-    _write_report(results, results_dir / "report.md", bootstrap_samples)
+    _plot_return_levels(
+        period_series,
+        period_results,
+        results_dir / "historical_1976_2014_return_levels.png",
+        title="GEV fits for inferred 1976–2014 window (not specified by source metadata)",
+    )
+    _plot_period_comparison(
+        results, period_results, results_dir / "historical_period_comparison.png"
+    )
+    _write_report(results, results_dir / "report.md", bootstrap_samples, period_results)
     return results
 
 
-def _write_report(results: pd.DataFrame, output: Path, bootstrap_samples: int) -> None:
+def _write_report(
+    results: pd.DataFrame,
+    output: Path,
+    bootstrap_samples: int,
+    period_results: pd.DataFrame | None = None,
+) -> None:
     eligible = results.loc[results["eligible"]].copy()
     excluded = results.loc[~results["eligible"]].copy()
     eligible = eligible.sort_values("return_period_years", ascending=False)
@@ -239,6 +358,26 @@ def _write_report(results: pd.DataFrame, output: Path, bootstrap_samples: int) -
     ) or "なし"
     extreme_count = int((eligible["return_period_years"] > 10000).sum())
     max_row = eligible.iloc[0]
+    period_rows: list[str] = []
+    period_summary = ""
+    if period_results is not None:
+        ordered_period = period_results.sort_values("return_period_years", ascending=False)
+        for _, row in ordered_period.iterrows():
+            period_rows.append(
+                "| {station} | {years} | {n} | {rain:.1f} | {hist:.1f} | {period} |".format(
+                    station=row["station"],
+                    years=f"{int(row['start_year'])}–{int(row['end_year'])}",
+                    n=int(row["n_years"]),
+                    rain=float(row["event_24h_mm"]),
+                    hist=float(row["historical_max_mm"]),
+                    period=_format_period(float(row["return_period_years"])),
+                )
+            )
+        period_max = ordered_period.iloc[0]
+        period_summary = (
+            f"この期間だけで推定した最大の点推定は **{period_max['station']}の"
+            f"{_format_period(float(period_max['return_period_years']))}** だった。"
+        )
     text = f"""# 令和8年8月千葉豪雨：地上観測に基づく24時間雨量の確率年
 
 ## 結論
@@ -260,6 +399,24 @@ def _write_report(results: pd.DataFrame, output: Path, bootstrap_samples: int) -
 ![地点別確率年](return_period_summary.png)
 
 ![GEV診断](return_level_diagnostics.png)
+
+## 記事文言から推定した期間での再計算（1976～2014年）
+
+**注意：1976～2014年は元データdescriptionに明記された期間ではない。** 記事の「1995年を中心とする約39年間」を中央年の前後19年と読み、かつCMIP6 historical runが2014年で終わることから逆算した条件付きの推定である。ウェザーニューズが極値統計に実際に切り出した開始・終了年は、記事にも元データdescriptionにも記載されていない。
+
+元データdescriptionを確認すると、NASA NEX-GDDP-CMIP6はhistoricalが1950～2014年、SSPが2015～2100年である。NIES2020で「39年」と明記されるのは極値統計の標本期間ではなく、CDFDMバイアス補正の基準期間 **1980～2018年** で、その内訳はhistorical runの1980～2014年とSSP585 runの2015～2018年である。この1980～2018年を記事の「1995年中心の過去気候期間」と読み替える根拠はないため、本図には採用していない。
+
+上記の推定期間に固定し、地点は主解析の13地点から再選別せず、数値が掲載されている年最大24時間雨量を品質記号 `]` も含めて使用した。したがって牛久・坂畑は観測掲載開始の関係で37値、その他は最大39値である。{period_summary}
+
+| 地点 | 使用期間 | 年最大値数 | 今回24h (mm) | 期間内最大 (mm) | 確率年 |
+|---|---:|---:|---:|---:|---:|
+{chr(10).join(period_rows)}
+
+![推定1976～2014年GEV診断](historical_1976_2014_return_levels.png)
+
+![期間による確率年の比較](historical_period_comparison.png)
+
+この追加計算のGEV入力はブロック最大法としての年最大値である。「フィルタなし」は、年最大値の品質記号による除外と地点の再選別を行わない、という意味で実装した。日々の24時間雨量をすべてGEVへ投入するPOT解析ではない。
 
 ## 方法と再現性
 
@@ -285,6 +442,8 @@ uv run chiba-rain --bootstrap {bootstrap_samples}
 ## 参照資料
 
 - [ウェザーニュース：千葉県で500mm超の記録的大雨](https://weathernews.jp/news/202608/140251/)
+- [NASA NCCS：NEX-GDDP-CMIP6 dataset description](https://www.nccs.nasa.gov/data-collections/nex-gddp-cmip6/)
+- [国立環境研究所：NIES2020 dataset description](https://www.nies.go.jp/doi/10.17595/20210501.001.html)
 - [気象庁：過去の気象データ検索（千葉県の地点選択）](https://www.data.jma.go.jp/stats/etrn/select/prefecture.php?prec_no=45)
 - [銚子地方気象台：千葉県における気温・降水量の経年変化](https://www.data.jma.go.jp/choshi/shosai/bousai/history_rain.html)
 - [気象庁：気象観測データの品質と均質性](https://www.jma.go.jp/jma/kishou/know/stats/dounyu_3.html)

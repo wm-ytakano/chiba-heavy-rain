@@ -1,6 +1,8 @@
 import numpy as np
+import pandas as pd
 from scipy.stats import genextreme
 
+from chiba_heavy_rain.analysis import _historical_period_results
 from chiba_heavy_rain.extremes import GEVFit, fit_gev, return_level, return_period
 
 
@@ -26,3 +28,21 @@ def test_fit_gev_returns_valid_scale() -> None:
     assert fit.scale > 0
     assert 80 < fit.location < 160
 
+
+def test_centered_1995_period_is_1976_through_2014_without_quality_filter() -> None:
+    current = pd.DataFrame(
+        [{"station": "test", "block_no": "0000", "eligible": True, "event_24h_mm": 180.0}]
+    )
+    annual = pd.DataFrame(
+        {
+            "station": ["test"] * 41,
+            "year": range(1975, 2016),
+            "max_24h_mm": np.linspace(80, 160, 41),
+            "usable": [False] * 41,
+        }
+    )
+    period, series = _historical_period_results(current, annual)
+    assert period.loc[0, "start_year"] == 1976
+    assert period.loc[0, "end_year"] == 2014
+    assert period.loc[0, "n_years"] == 39
+    assert len(series["test"]) == 39
