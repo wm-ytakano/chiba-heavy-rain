@@ -34,6 +34,13 @@ ARTICLE_STATION_LABELS = {
     "佐倉": "記事地域：八千代・佐倉付近",
 }
 
+ARTICLE_RETURN_PERIODS = {
+    "千葉": "約574年",
+    "茂原": "約277年",
+    "牛久": "80～150年程度",
+    "佐倉": "80～150年程度",
+}
+
 
 def _format_period(value: float) -> str:
     if not np.isfinite(value):
@@ -218,6 +225,7 @@ def _historical_period_results(
     annual: pd.DataFrame,
     start_year: int = 1976,
     end_year: int = 2014,
+    bootstrap_samples: int = 0,
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
     """Fit the same stations over the 39 years centered on 1995.
 
@@ -235,25 +243,51 @@ def _historical_period_results(
         values = frame["max_24h_mm"].to_numpy(float)
         fit = fit_gev(values)
         event_value = float(station_row.event_24h_mm)
-        rows.append(
-            {
-                "station": station_row.station,
-                "block_no": station_row.block_no,
-                "start_year": int(frame["year"].min()),
-                "end_year": int(frame["year"].max()),
-                "n_years": len(frame),
-                "eligible": True,
-                "window_basis": "inferred_from_article_not_confirmed_by_source_description",
-                "event_24h_mm": event_value,
-                "historical_max_mm": float(values.max()),
-                "shape_xi": fit.shape_xi,
-                "location": fit.location,
-                "scale": fit.scale,
-                "return_period_years": return_period(event_value, fit),
-            }
-        )
+        row: dict[str, object] = {
+            "station": station_row.station,
+            "block_no": station_row.block_no,
+            "start_year": int(frame["year"].min()),
+            "end_year": int(frame["year"].max()),
+            "n_years": len(frame),
+            "eligible": True,
+            "window_basis": "inferred_from_article_not_confirmed_by_source_description",
+            "event_24h_mm": event_value,
+            "historical_max_mm": float(values.max()),
+            "shape_xi": fit.shape_xi,
+            "location": fit.location,
+            "scale": fit.scale,
+            "return_period_years": return_period(event_value, fit),
+        }
+        if bootstrap_samples and station_row.station in ARTICLE_STATION_LABELS:
+            row.update(
+                bootstrap_return_period(
+                    values,
+                    event_value,
+                    samples=bootstrap_samples,
+                    seed=20260000 + int(station_row.block_no),
+                )
+            )
+        rows.append(row)
         series[str(station_row.station)] = frame.copy()
     return pd.DataFrame(rows), series
+
+
+def _article_comparison_table(period_results: pd.DataFrame) -> pd.DataFrame:
+    rows: list[dict[str, str]] = []
+    for station, article_location in ARTICLE_STATION_LABELS.items():
+        row = period_results.loc[period_results["station"] == station].iloc[0]
+        estimate = _format_period(float(row["return_period_years"]))
+        lower = _format_period(float(row["ci_low"]))
+        upper = _format_period(float(row["ci_high"]))
+        rows.append(
+            {
+                "地点": station,
+                "計算した確率年（95%区間）": f"{estimate}（{lower}～{upper}）",
+                "元記事の地域名": article_location.removeprefix("記事地域："),
+                "元記事の確率年": ARTICLE_RETURN_PERIODS[station],
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def _article_location_subset(
@@ -362,12 +396,16 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
     results.to_csv(results_dir / "station_return_periods.csv", index=False)
     annual_frame = pd.concat(all_annual, ignore_index=True)
     annual_frame.to_csv(results_dir / "annual_max_24h.csv", index=False)
-    period_results, period_series = _historical_period_results(results, annual_frame)
+    period_results, period_series = _historical_period_results(
+        results, annual_frame, bootstrap_samples=bootstrap_samples
+    )
     article_current_results, article_current_series = _article_location_subset(
         results, historical_series
     )
     article_results, article_series = _article_location_subset(period_results, period_series)
     period_results.to_csv(results_dir / "historical_1976_2014_return_periods.csv", index=False)
+    article_comparison = _article_comparison_table(period_results)
+    article_comparison.to_csv(results_dir / "article_location_comparison.csv", index=False)
     _configure_plotting()
     _plot_summary(results, results_dir / "return_period_summary.png")
     _plot_return_levels(
@@ -389,7 +427,13 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
     _plot_period_comparison(
         results, period_results, results_dir / "historical_period_comparison.png"
     )
-    _write_report(results, results_dir / "report.md", bootstrap_samples, period_results)
+    _write_report(
+        results,
+        results_dir / "report.md",
+        bootstrap_samples,
+        period_results,
+        article_comparison,
+    )
     return results
 
 
@@ -404,12 +448,16 @@ def render_existing(results_dir: Path, bootstrap_samples: int) -> pd.DataFrame:
             & annual["year"].between(int(row.start_year), 2025)
             & annual["usable"]
         ].copy()
-    period_results, period_series = _historical_period_results(results, annual)
+    period_results, period_series = _historical_period_results(
+        results, annual, bootstrap_samples=bootstrap_samples
+    )
     article_current_results, article_current_series = _article_location_subset(
         results, historical_series
     )
     article_results, article_series = _article_location_subset(period_results, period_series)
     period_results.to_csv(results_dir / "historical_1976_2014_return_periods.csv", index=False)
+    article_comparison = _article_comparison_table(period_results)
+    article_comparison.to_csv(results_dir / "article_location_comparison.csv", index=False)
     _configure_plotting()
     _plot_summary(results, results_dir / "return_period_summary.png")
     _plot_return_levels(
@@ -431,7 +479,13 @@ def render_existing(results_dir: Path, bootstrap_samples: int) -> pd.DataFrame:
     _plot_period_comparison(
         results, period_results, results_dir / "historical_period_comparison.png"
     )
-    _write_report(results, results_dir / "report.md", bootstrap_samples, period_results)
+    _write_report(
+        results,
+        results_dir / "report.md",
+        bootstrap_samples,
+        period_results,
+        article_comparison,
+    )
     return results
 
 
@@ -440,6 +494,7 @@ def _write_report(
     output: Path,
     bootstrap_samples: int,
     period_results: pd.DataFrame | None = None,
+    article_comparison: pd.DataFrame | None = None,
 ) -> None:
     eligible = results.loc[results["eligible"]].copy()
     excluded = results.loc[~results["eligible"]].copy()
@@ -466,6 +521,7 @@ def _write_report(
     period_rows: list[str] = []
     period_max_station = ""
     period_max_value = float("nan")
+    comparison_rows: list[str] = []
     if period_results is not None:
         ordered_period = period_results.loc[
             period_results["station"].isin(ARTICLE_STATION_LABELS)
@@ -485,6 +541,9 @@ def _write_report(
         period_max = ordered_period.iloc[0]
         period_max_station = str(period_max["station"])
         period_max_value = float(period_max["return_period_years"])
+    if article_comparison is not None:
+        for row in article_comparison.itertuples(index=False, name=None):
+            comparison_rows.append("| " + " | ".join(str(value) for value in row) + " |")
     text = f"""# 令和8年8月千葉豪雨：地上観測に基づく24時間雨量の確率年
 
 ## 結論
@@ -504,6 +563,14 @@ def _write_report(
 | 記事の地域 | JMA観測所 | 使用期間 | 年最大値数 | 今回観測値 (mm) | 期間内最大 (mm) | 確率年 |
 |---|---|---:|---:|---:|---:|---:|
 {chr(10).join(period_rows)}
+
+### 元記事との確率年比較
+
+計算値の括弧内は、年最大値を地点ごとに再標本化した非パラメトリック・ブートストラップ（{bootstrap_samples:,}回）による95%区間である。
+
+| 地点 | 計算した確率年（95%区間） | 対応する元記事の地域名 | 元記事の確率年 |
+|---|---:|---|---:|
+{chr(10).join(comparison_rows)}
 
 ![記事言及地域の1976～2014年GEV診断](historical_1976_2014_return_levels.png)
 

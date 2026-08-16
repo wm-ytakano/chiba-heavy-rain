@@ -4,6 +4,7 @@ from scipy.stats import genextreme
 
 from chiba_heavy_rain.analysis import (
     ARTICLE_STATION_LABELS,
+    _article_comparison_table,
     _article_location_subset,
     _historical_period_results,
     _year_month_label,
@@ -71,3 +72,22 @@ def test_article_plot_subset_contains_only_directly_matched_eligible_stations() 
 def test_year_month_label_uses_annual_maximum_date() -> None:
     row = pd.Series({"year": 2013, "date": "10/16 13:50"})
     assert _year_month_label(row) == "2013年10月"
+
+
+def test_article_comparison_has_requested_four_columns() -> None:
+    results = pd.DataFrame(
+        {
+            "station": list(ARTICLE_STATION_LABELS),
+            "return_period_years": [10.0, 20.0, 30.0, 40.0],
+            "ci_low": [5.0, 10.0, 15.0, 20.0],
+            "ci_high": [20.0, 40.0, 60.0, 80.0],
+        }
+    )
+    comparison = _article_comparison_table(results)
+    assert comparison.columns.tolist() == [
+        "地点",
+        "計算した確率年（95%区間）",
+        "元記事の地域名",
+        "元記事の確率年",
+    ]
+    assert len(comparison) == 4
