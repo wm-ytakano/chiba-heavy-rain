@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+from scipy.optimize import brentq
+from scipy.special import gamma
 from scipy.stats import genextreme
 
 
@@ -21,13 +23,56 @@ class GEVFit:
 
 
 def fit_gev(values: np.ndarray) -> GEVFit:
+    """Estimate stationary GEV parameters with sample L-moments.
+
+    Probability-weighted moments are converted to L1, L2, and L-skewness.
+    The GEV shape is obtained by numerically inverting the theoretical
+    L-skewness relation. This avoids the pathological unconstrained MLE shapes
+    that can occur in short annual-maximum records.
+    """
     x = np.asarray(values, dtype=float)
     if x.ndim != 1 or len(x) < 3 or not np.all(np.isfinite(x)):
         raise ValueError("GEV fit requires at least three finite one-dimensional values")
-    c, loc, scale = genextreme.fit(x)
-    if not np.isfinite(scale) or scale <= 0:
-        raise RuntimeError("Invalid GEV scale estimate")
-    return GEVFit(shape_xi=float(-c), location=float(loc), scale=float(scale))
+    ordered = np.sort(x)
+    n = len(ordered)
+    index = np.arange(n, dtype=float)
+    b0 = float(np.mean(ordered))
+    b1 = float(np.sum((index / (n - 1)) * ordered) / n)
+    b2 = float(
+        np.sum((index * (index - 1) / ((n - 1) * (n - 2))) * ordered) / n
+    )
+    l1 = b0
+    l2 = 2.0 * b1 - b0
+    l3 = 6.0 * b2 - 6.0 * b1 + b0
+    if not np.isfinite(l2) or l2 <= 0:
+        raise RuntimeError("GEV L-moment fit requires positive L2")
+    tau3 = l3 / l2
+    if not -1.0 < tau3 < 1.0:
+        raise RuntimeError(f"GEV L-skewness outside (-1, 1): {tau3}")
+
+    def theoretical_tau3(xi: float) -> float:
+        if abs(xi) < 1e-8:
+            return 2.0 * np.log(3.0) / np.log(2.0) - 3.0
+        numerator = np.expm1(xi * np.log(3.0))
+        denominator = np.expm1(xi * np.log(2.0))
+        return 2.0 * numerator / denominator - 3.0
+
+    shape_xi = float(brentq(lambda xi: theoretical_tau3(xi) - tau3, -10.0, 0.999999))
+    if abs(shape_xi) < 1e-7:
+        scale = float(l2 / np.log(2.0))
+        location = float(l1 - np.euler_gamma * scale)
+        shape_xi = 0.0
+    else:
+        gamma_term = float(gamma(1.0 - shape_xi))
+        scale = float(
+            l2
+            * shape_xi
+            / (gamma_term * np.expm1(shape_xi * np.log(2.0)))
+        )
+        location = float(l1 - scale * (gamma_term - 1.0) / shape_xi)
+    if not np.isfinite(scale) or scale <= 0 or not np.isfinite(location):
+        raise RuntimeError("Invalid GEV L-moment parameter estimate")
+    return GEVFit(shape_xi=shape_xi, location=location, scale=scale)
 
 
 def return_period(value: float, fit: GEVFit) -> float:
@@ -87,4 +132,3 @@ def bootstrap_return_period(
         "bootstrap_infinite": infinite,
         "bootstrap_failures": failures,
     }
-

@@ -21,12 +21,13 @@ def test_scipy_shape_sign_conversion() -> None:
     assert np.isclose(return_level(np.array([100.0]), fit)[0], expected)
 
 
-def test_fit_gev_returns_valid_scale() -> None:
+def test_l_moment_fit_recovers_synthetic_gev_parameters() -> None:
     rng = np.random.default_rng(4)
-    values = genextreme.rvs(-0.1, loc=120, scale=25, size=80, random_state=rng)
+    values = genextreme.rvs(-0.1, loc=120, scale=25, size=100_000, random_state=rng)
     fit = fit_gev(values)
-    assert fit.scale > 0
-    assert 80 < fit.location < 160
+    assert np.isclose(fit.shape_xi, 0.1, atol=0.015)
+    assert np.isclose(fit.location, 120, atol=0.5)
+    assert np.isclose(fit.scale, 25, atol=0.5)
 
 
 def test_centered_1995_period_is_1976_through_2014_without_quality_filter() -> None:

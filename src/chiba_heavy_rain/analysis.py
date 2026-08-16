@@ -9,7 +9,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.stats import genextreme
 
 from .extremes import (
     bootstrap_return_period,
@@ -85,7 +84,7 @@ def _plot_return_levels(
     series: dict[str, pd.DataFrame],
     results: pd.DataFrame,
     output: Path,
-    title: str = "Observed annual maxima and stationary GEV fits",
+    title: str = "Observed annual maxima and stationary GEV L-moment fits",
 ) -> None:
     eligible = results.loc[results["eligible"]].sort_values("station")
     ncols = 3
@@ -100,7 +99,13 @@ def _plot_return_levels(
         ranks = np.arange(1, len(ordered) + 1)
         empirical_period = (len(ordered) + 0.12) / (len(ordered) - ranks + 0.44)
         ax.scatter(empirical_period, ordered, s=12, alpha=0.7, color="#555555", label="annual maxima")
-        ax.plot(periods, return_level(periods, fit), color="#1261a0", lw=1.8, label="GEV MLE")
+        ax.plot(
+            periods,
+            return_level(periods, fit),
+            color="#1261a0",
+            lw=1.8,
+            label="GEV L-moments",
+        )
         ax.scatter(
             [float(row["return_period_years"])],
             [float(row["event_24h_mm"])],
@@ -256,9 +261,6 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
                 samples=bootstrap_samples,
                 seed=20260813 + index,
             )
-            log_likelihood = float(
-                np.sum(genextreme.logpdf(values, fit.scipy_shape, loc=fit.location, scale=fit.scale))
-            )
             base.update(
                 {
                     "historical_max_mm": float(np.max(values)),
@@ -266,7 +268,6 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
                     "shape_xi": fit.shape_xi,
                     "location": fit.location,
                     "scale": fit.scale,
-                    "aic": 6 - 2 * log_likelihood,
                     "return_period_years": period,
                     "return_period_including_2026": return_period(
                         float(event["event_24h_mm"]), full_fit
@@ -290,7 +291,7 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
         period_series,
         period_results,
         results_dir / "historical_1976_2014_return_levels.png",
-        title="GEV fits for inferred 1976–2014 window (not specified by source metadata)",
+        title="L-moment GEV fits for inferred 1976–2014 window (not specified by source metadata)",
     )
     _plot_period_comparison(
         results, period_results, results_dir / "historical_period_comparison.png"
@@ -321,7 +322,7 @@ def render_existing(results_dir: Path, bootstrap_samples: int) -> pd.DataFrame:
         period_series,
         period_results,
         results_dir / "historical_1976_2014_return_levels.png",
-        title="GEV fits for inferred 1976–2014 window (not specified by source metadata)",
+        title="L-moment GEV fits for inferred 1976–2014 window (not specified by source metadata)",
     )
     _plot_period_comparison(
         results, period_results, results_dir / "historical_period_comparison.png"
@@ -382,7 +383,7 @@ def _write_report(
 
 ## 結論
 
-気象庁の千葉県内地上観測のうち、JMAの統計切断表示後の同一系列が40年以上あり、利用可能な年最大24時間降水量を40年分以上持つ地点を対象に、定常GEV分布を最尤推定した。2026年8月13～15日の観測最大24時間雨量を、事象から独立な2025年までの分布に照らした主解析では、最大の点推定は **{max_row['station']}の{_format_period(float(max_row['return_period_years']))}** だった。1万年を超えた地点は **{extreme_count}地点** である。
+気象庁の千葉県内地上観測のうち、JMAの統計切断表示後の同一系列が40年以上あり、利用可能な年最大24時間降水量を40年分以上持つ地点を対象に、標本Lモーメント（PWM）で定常GEV分布を推定した。2026年8月13～15日の観測最大24時間雨量を、事象から独立な2025年までの分布に照らした主解析では、最大の点推定は **{max_row['station']}の{_format_period(float(max_row['return_period_years']))}** だった。1万年を超えた地点は **{extreme_count}地点** である。
 
 ただし、記事の574.2 mmは千葉市緑区～市原市東部の「解析雨量」（格子値）であり、地上観測所の値ではない。今回の地上観測解析は、その574.2 mm自体の確率年を直接検証するものではなく、同じ豪雨を既存観測所で捉えた場合の局地ごとの頻度を示す。両者の空間代表性の違いを無視した一対一比較はできない。
 
@@ -422,7 +423,7 @@ def _write_report(
 
 - 出典は気象庁「過去の気象データ検索」の年ごとの値（詳細・N時間降水量）と2026年8月の日ごとの値。取得URLとSHA-256は `data/raw/manifest.json` に保存した。
 - 気象庁HTMLの `data_2t_*` 表示を統計切断として扱い、その後の最新系列が40年以上かつ利用可能な年最大値40個以上の地点を適格とした。資料不足値 `]` は除外したが、それ自体は統計切断とはみなしていない。依頼に従い測器・観測方法の変更補正は行っていない。
-- GEVの形状母数は通常の記法 ξ（SciPyの `genextreme` の形状母数とは符号が逆）。最尤推定を用いた。
+- GEV母数は標本の確率重み付きモーメントからL1、L2、L-skewnessを計算し、理論L-skewnessを数値的に逆算して推定した。形状母数は通常の記法 ξ（SciPyの `genextreme` の形状母数とは符号が逆）。
 - 主解析は今回事象を分布推定から除外し、推定対象と評価対象を分離した。感度分析では今回値を1年追加した。
 - 再現期間は `T = 1 / (1 - F(x))`。これは「T年ごとに規則的に起きる」の意味ではなく、定常性を仮定した年超過確率の逆数である。
 

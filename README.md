@@ -2,7 +2,7 @@
 
 This repository estimates station-wise return periods for the 13–15 August 2026
 Chiba heavy-rain event from JMA ground observations. It uses annual maximum rolling
-24-hour rainfall, a stationary GEV distribution fitted by maximum likelihood, and
+24-hour rainfall, a stationary GEV distribution fitted by sample L-moments, and
 station-wise nonparametric bootstrap intervals.
 
 The primary fit uses observations only through 2025, so the event being evaluated is
