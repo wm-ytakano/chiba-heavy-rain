@@ -223,11 +223,12 @@ def _plot_gev(
     summary: pd.DataFrame,
     output: Path,
 ) -> None:
+    panel_station_names = ("千葉", "茂原", "牛久", "佐倉")
     periods = np.geomspace(1.01, 1000, 500)
     fig, axes = plt.subplots(2, 2, figsize=(11, 8.5), squeeze=False)
     primary = summary.loc[summary["analysis_variant"] == "all_numeric"].set_index("station")
     for panel_index, (ax, station_name) in enumerate(
-        zip(axes.ravel(), ARTICLE_STATION_NAMES, strict=True)
+        zip(axes.ravel(), panel_station_names, strict=True)
     ):
         frame = paired_frames[station_name]
         row = primary.loc[station_name]
@@ -281,6 +282,18 @@ def _plot_gev(
                 "日降水量GEVに24時間降水量",
             ),
         )
+        marker_x_values = [
+            min(period, 1000) if np.isfinite(period) else 1000
+            for period, _, _, _ in marker_points
+        ]
+        ax.plot(
+            marker_x_values,
+            [float(row["event_24h_mm"])] * 2,
+            color="#777777",
+            lw=1.0,
+            linestyle="--",
+            zorder=4,
+        )
         for period, rainfall, color, label in marker_points:
             x_value = min(period, 1000) if np.isfinite(period) else 1000
             ax.scatter(x_value, rainfall, marker="*", s=85, color=color, zorder=5, label=label)
@@ -297,7 +310,15 @@ def _plot_gev(
         ax.set_ylabel("降水量（mm）")
         ax.grid(which="both", alpha=0.2)
     handles, labels = axes.ravel()[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=4, frameon=False)
+    # Matplotlib fills multi-column legends down each column.
+    legend_order = [1, 0, 3, 2, 4, 5]
+    fig.legend(
+        [handles[index] for index in legend_order],
+        [labels[index] for index in legend_order],
+        loc="lower center",
+        ncol=3,
+        frameon=False,
+    )
     fig.tight_layout(rect=(0, 0.09, 1, 1))
     fig.savefig(output)
     plt.close(fig)
