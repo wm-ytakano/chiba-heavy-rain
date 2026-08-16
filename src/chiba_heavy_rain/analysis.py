@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import math
 import re
+import string
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -108,6 +109,8 @@ def _plot_return_levels(
     output: Path,
     title: str = "Observed annual maxima and stationary GEV L-moment fits",
     annotate_maximum: bool = False,
+    fixed_ylim: tuple[float, float] | None = None,
+    lettered_titles: bool = False,
 ) -> None:
     eligible = results.loc[results["eligible"]].sort_values("station")
     ncols = 2 if len(eligible) <= 4 else 3
@@ -115,7 +118,9 @@ def _plot_return_levels(
     figure_width = 11 if ncols == 2 else 13
     fig, axes = plt.subplots(nrows, ncols, figsize=(figure_width, 4.2 * nrows), squeeze=False)
     periods = np.geomspace(1.05, 1000, 500)
-    for ax, (_, row) in zip(axes.ravel(), eligible.iterrows(), strict=False):
+    for panel_index, (ax, (_, row)) in enumerate(
+        zip(axes.ravel(), eligible.iterrows(), strict=False)
+    ):
         station = str(row["station"])
         values = series[station]["max_24h_mm"].to_numpy(float)
         fit = fit_gev(values)
@@ -165,13 +170,24 @@ def _plot_return_levels(
         # Keep short-record shape estimates from making the observed range unreadable.
         # The fitted curve may leave the panel at long return periods; that behavior is
         # itself a warning about extrapolation instability.
-        observed_cap = max(float(np.max(ordered)), float(row["event_24h_mm"]))
-        ax.set_ylim(0, observed_cap * 1.35)
-        station_label = str(row.get("display_label", station))
-        ax.set_title(
-            f"{station_label}\nJMA {station}  n={int(row['n_years'])} "
-            f"({int(row['start_year'])}–{int(row['end_year'])})"
-        )
+        if fixed_ylim is None:
+            observed_cap = max(float(np.max(ordered)), float(row["event_24h_mm"]))
+            ax.set_ylim(0, observed_cap * 1.35)
+        else:
+            ax.set_ylim(*fixed_ylim)
+        if lettered_titles:
+            ax.set_title(
+                f"({string.ascii_lowercase[panel_index]}) {station} "
+                f"n={int(row['n_years'])} "
+                f"({int(row['start_year'])}-{int(row['end_year'])})",
+                loc="left",
+            )
+        else:
+            station_label = str(row.get("display_label", station))
+            ax.set_title(
+                f"{station_label}\nJMA {station}  n={int(row['n_years'])} "
+                f"({int(row['start_year'])}–{int(row['end_year'])})"
+            )
         ax.set_xlabel("Return period (years)")
         ax.set_ylabel("24-hour rainfall (mm)")
         ax.grid(which="both", alpha=0.2)
@@ -355,6 +371,8 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
         results_dir / "historical_1976_2014_return_levels.png",
         title="Article-mentioned locations: JMA annual maxima, 1976–2014",
         annotate_maximum=True,
+        fixed_ylim=(0, 400),
+        lettered_titles=True,
     )
     _plot_period_comparison(
         results, period_results, results_dir / "historical_period_comparison.png"
@@ -394,6 +412,8 @@ def render_existing(results_dir: Path, bootstrap_samples: int) -> pd.DataFrame:
         results_dir / "historical_1976_2014_return_levels.png",
         title="Article-mentioned locations: JMA annual maxima, 1976–2014",
         annotate_maximum=True,
+        fixed_ylim=(0, 400),
+        lettered_titles=True,
     )
     _plot_period_comparison(
         results, period_results, results_dir / "historical_period_comparison.png"
