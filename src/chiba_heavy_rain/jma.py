@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import time
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 
@@ -29,6 +30,11 @@ def annual_url(station: Station) -> str:
     return _url(station, station.annual_page, year="", month="", day="", view="a5")
 
 
+def annual_daily_url(station: Station) -> str:
+    """JMA annual main-elements table containing maximum daily rainfall."""
+    return _url(station, station.annual_page, year="", month="", day="", view="p1")
+
+
 def event_url(station: Station) -> str:
     return _url(
         station,
@@ -37,6 +43,39 @@ def event_url(station: Station) -> str:
         month=8,
         day="",
         view="a5",
+    )
+
+
+def event_daily_url(station: Station) -> str:
+    """JMA August 2026 daily main-elements table containing calendar-day totals."""
+    return _url(
+        station,
+        station.daily_page,
+        year=2026,
+        month=8,
+        day="",
+        view="p1",
+    )
+
+
+def _merge_manifest(raw_dir: Path, records: list[dict[str, object]]) -> None:
+    """Merge newly fetched table records without discarding other cached tables."""
+    manifest_path = raw_dir / "manifest.json"
+    existing: list[dict[str, object]] = []
+    if manifest_path.exists():
+        loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if isinstance(loaded, list):
+            existing = [record for record in loaded if isinstance(record, dict)]
+    replaced = {(str(record["block_no"]), str(record["table"])) for record in records}
+    preserved = [
+        record
+        for record in existing
+        if (str(record.get("block_no")), str(record.get("table"))) not in replaced
+    ]
+    merged = preserved + records
+    merged.sort(key=lambda record: (str(record.get("block_no")), str(record.get("table"))))
+    manifest_path.write_text(
+        json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
 
 
@@ -67,9 +106,49 @@ def download_pages(
                         "sha256": hashlib.sha256(payload).hexdigest(),
                     }
                 )
-    (raw_dir / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    _merge_manifest(raw_dir, manifest)
+    return manifest
+
+
+def download_daily_comparison_pages(
+    stations: tuple[Station, ...], raw_dir: Path, refresh: bool = False
+) -> list[dict[str, object]]:
+    """Fetch annual daily maxima and August-2026 calendar-day rainfall tables."""
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    manifest: list[dict[str, object]] = []
+    with httpx.Client(
+        headers={"User-Agent": USER_AGENT}, follow_redirects=True, timeout=30.0
+    ) as client:
+        for station in stations:
+            pages = (
+                (
+                    "annual_daily",
+                    annual_daily_url(station),
+                    raw_dir / f"{station.block_no}_annual_daily.html",
+                ),
+                (
+                    "event_daily",
+                    event_daily_url(station),
+                    raw_dir / f"{station.block_no}_event_daily.html",
+                ),
+            )
+            for label, url, path in pages:
+                if refresh or not path.exists():
+                    response = client.get(url)
+                    response.raise_for_status()
+                    path.write_bytes(response.content)
+                    time.sleep(0.2)
+                payload = path.read_bytes()
+                manifest.append(
+                    {
+                        **asdict(station),
+                        "table": label,
+                        "url": url,
+                        "path": str(path),
+                        "sha256": hashlib.sha256(payload).hexdigest(),
+                    }
+                )
+    _merge_manifest(raw_dir, manifest)
     return manifest
 
 
@@ -89,6 +168,54 @@ def _target_table(path: Path, title_fragment: str) -> BeautifulSoup:
         if title_fragment in table.get_text(" ", strip=True):
             return table
     raise ValueError(f"Could not find {title_fragment!r} table in {path}")
+
+
+def _header_paths(table: BeautifulSoup) -> list[tuple[str, ...]]:
+    """Expand rowspan/colspan headers into one semantic path per data column."""
+    header_rows: list[list[BeautifulSoup]] = []
+    for tr in table.find_all("tr"):
+        cells = tr.find_all(["th", "td"], recursive=False)
+        if not cells:
+            continue
+        if any(cell.name == "td" for cell in cells):
+            break
+        header_rows.append(cells)
+    grid: dict[tuple[int, int], str] = {}
+    max_column = 0
+    for row_index, cells in enumerate(header_rows):
+        column = 0
+        for cell in cells:
+            while (row_index, column) in grid:
+                column += 1
+            text = cell.get_text(" ", strip=True)
+            rowspan = int(cell.get("rowspan", 1))
+            colspan = int(cell.get("colspan", 1))
+            for row_offset in range(rowspan):
+                for column_offset in range(colspan):
+                    grid[(row_index + row_offset, column + column_offset)] = text
+            column += colspan
+            max_column = max(max_column, column)
+    paths: list[tuple[str, ...]] = []
+    for column in range(max_column):
+        parts: list[str] = []
+        for row_index in range(len(header_rows)):
+            text = grid.get((row_index, column), "")
+            if text and (not parts or text != parts[-1]):
+                parts.append(text)
+        paths.append(tuple(parts))
+    return paths
+
+
+def _find_semantic_table_column(
+    path: Path, predicate: Callable[[tuple[str, ...]], bool]
+) -> tuple[BeautifulSoup, int]:
+    """Find a table column by its expanded header path."""
+    soup = BeautifulSoup(path.read_bytes(), "lxml")
+    for table in soup.find_all("table"):
+        for index, parts in enumerate(_header_paths(table)):
+            if predicate(parts):
+                return table, index
+    raise ValueError(f"Could not find requested semantic column in {path}")
 
 
 def parse_annual_24h(path: Path) -> pd.DataFrame:
@@ -131,6 +258,43 @@ def parse_annual_24h(path: Path) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("year").reset_index(drop=True)
 
 
+def parse_annual_daily_max(path: Path) -> pd.DataFrame:
+    """Parse annual maximum calendar-day rainfall from JMA main-elements tables."""
+
+    def is_daily_max(parts: tuple[str, ...]) -> bool:
+        joined = " ".join(parts)
+        return (
+            "降水量" in joined
+            and "最大" in parts
+            and any(part == "日" or part.startswith("日 ") for part in parts)
+        )
+
+    table, value_index = _find_semantic_table_column(path, is_daily_max)
+    rows: list[dict[str, object]] = []
+    for tr in table.find_all("tr"):
+        cells = tr.find_all(["th", "td"], recursive=False)
+        texts = [cell.get_text(" ", strip=True) for cell in cells]
+        if not texts or not re.fullmatch(r"(18|19|20)\d{2}", texts[0]):
+            continue
+        if value_index >= len(cells):
+            continue
+        value_text = texts[value_index]
+        value_classes = " ".join(cells[value_index].get("class", []))
+        rows.append(
+            {
+                "year": int(texts[0]),
+                "max_daily_mm": _numeric(value_text),
+                "raw_daily_value": value_text,
+                "daily_statistical_break": "data_2t" in value_classes,
+                "daily_usable": "]" not in value_text and _numeric(value_text) is not None,
+                "daily_value_classes": value_classes,
+            }
+        )
+    if not rows:
+        raise ValueError(f"No annual maximum daily rainfall rows parsed from {path}")
+    return pd.DataFrame(rows).sort_values("year").reset_index(drop=True)
+
+
 def parse_event_24h(path: Path, days: range = range(13, 16)) -> dict[str, object]:
     """Return the largest rolling 24-hour value reported on event days."""
     table = _target_table(path, "最大24時間降水量")
@@ -155,6 +319,40 @@ def parse_event_24h(path: Path, days: range = range(13, 16)) -> dict[str, object
     if not valid:
         raise ValueError(f"No event 24-hour value parsed from {path}")
     return max(valid, key=lambda r: float(r["event_24h_mm"]))
+
+
+def parse_event_daily(path: Path, days: range = range(13, 16)) -> dict[str, object]:
+    """Return the largest fixed-calendar-day rainfall total on the event days."""
+
+    def is_daily_total(parts: tuple[str, ...]) -> bool:
+        joined = " ".join(parts)
+        return "降水量" in joined and any(part.startswith("合計") for part in parts)
+
+    table, value_index = _find_semantic_table_column(path, is_daily_total)
+    candidates: list[dict[str, object]] = []
+    for tr in table.find_all("tr"):
+        cells = tr.find_all(["th", "td"], recursive=False)
+        texts = [cell.get_text(" ", strip=True) for cell in cells]
+        if not texts or not re.fullmatch(r"\d{1,2}", texts[0]):
+            continue
+        day = int(texts[0])
+        if day not in days or value_index >= len(cells):
+            continue
+        value_text = texts[value_index]
+        value_classes = " ".join(cells[value_index].get("class", []))
+        candidates.append(
+            {
+                "day": day,
+                "event_daily_mm": _numeric(value_text),
+                "event_daily_raw_value": value_text,
+                "event_daily_usable": "]" not in value_text and _numeric(value_text) is not None,
+                "event_daily_value_classes": value_classes,
+            }
+        )
+    valid = [row for row in candidates if row["event_daily_mm"] is not None]
+    if not valid:
+        raise ValueError(f"No event daily rainfall value parsed from {path}")
+    return max(valid, key=lambda row: float(row["event_daily_mm"]))
 
 
 def latest_contiguous_complete_run(

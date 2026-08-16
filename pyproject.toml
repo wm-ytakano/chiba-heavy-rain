@@ -22,6 +22,7 @@ dev = [
 
 [project.scripts]
 chiba-rain = "chiba_heavy_rain.analysis:main"
+chiba-rain-daily-vs-24h = "chiba_heavy_rain.daily_vs_24h:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -36,4 +37,3 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-

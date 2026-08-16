@@ -21,6 +21,17 @@ uv run chiba-rain --bootstrap 500
 Use `--refresh` to replace the cached JMA HTML snapshots. The source URL and SHA-256
 of every snapshot are recorded in `data/raw/manifest.json`.
 
+To compare fixed-calendar-day rainfall with moving 24-hour rainfall at the four
+article-matched stations without rewriting the blog report, run:
+
+```bash
+uv run chiba-rain-daily-vs-24h --bootstrap 2000
+```
+
+This writes paired annual-maxima data, three return-period scenarios, and two
+diagnostic figures to `results/`. The comparison command never writes
+`results/report.md`.
+
 Outputs are written to `results/`, including the Japanese report
 `results/report.md`, tidy CSV files, and diagnostic plots.
 
