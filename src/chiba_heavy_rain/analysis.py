@@ -107,10 +107,11 @@ def _plot_return_levels(
     series: dict[str, pd.DataFrame],
     results: pd.DataFrame,
     output: Path,
-    title: str = "Observed annual maxima and stationary GEV L-moment fits",
+    title: str | None = "Observed annual maxima and stationary GEV L-moment fits",
     annotate_maximum: bool = False,
     fixed_ylim: tuple[float, float] | None = None,
     lettered_titles: bool = False,
+    japanese_labels: bool = False,
 ) -> None:
     eligible = results.loc[results["eligible"]].sort_values("station")
     ncols = 2 if len(eligible) <= 4 else 3
@@ -127,8 +128,16 @@ def _plot_return_levels(
         ordered = np.sort(values)
         ranks = np.arange(1, len(ordered) + 1)
         empirical_period = (len(ordered) + 0.12) / (len(ordered) - ranks + 0.44)
+        annual_label = "年最大24時間降水量" if japanese_labels else "annual maxima"
+        fit_label = "GEV（Lモーメント法）" if japanese_labels else "GEV L-moments"
+        event_label = "JMA観測値（2026年8月）" if japanese_labels else "JMA gauge, Aug 2026"
         ax.scatter(
-            empirical_period, ordered, s=12, alpha=0.7, color="#555555", label="annual maxima"
+            empirical_period,
+            ordered,
+            s=12,
+            alpha=0.7,
+            color="#555555",
+            label=annual_label,
         )
         if annotate_maximum:
             largest_rows = series[station].nlargest(2, "max_24h_mm")
@@ -152,7 +161,7 @@ def _plot_return_levels(
             return_level(periods, fit),
             color="#1261a0",
             lw=1.8,
-            label="GEV L-moments",
+            label=fit_label,
         )
         ax.scatter(
             [float(row["return_period_years"])],
@@ -161,7 +170,7 @@ def _plot_return_levels(
             s=95,
             color="#c23b22",
             zorder=5,
-            label="JMA gauge, Aug 2026",
+            label=event_label,
         )
         ax.set_xscale("log")
         ax.set_xlim(1, 1000)
@@ -188,16 +197,18 @@ def _plot_return_levels(
                 f"{station_label}\nJMA {station}  n={int(row['n_years'])} "
                 f"({int(row['start_year'])}–{int(row['end_year'])})"
             )
-        ax.set_xlabel("Return period (years)")
-        ax.set_ylabel("24-hour rainfall (mm)")
+        ax.set_xlabel("再現期間（年）" if japanese_labels else "Return period (years)")
+        ax.set_ylabel("24時間降水量（mm）" if japanese_labels else "24-hour rainfall (mm)")
         ax.grid(which="both", alpha=0.2)
     unused_axes = axes.ravel()[len(eligible) :]
     for ax in unused_axes:
         ax.axis("off")
     handles, labels = axes.ravel()[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False)
-    fig.suptitle(title, y=0.998, fontsize=15)
-    fig.tight_layout(rect=(0, 0.045, 1, 0.97))
+    if title is not None:
+        fig.suptitle(title, y=0.998, fontsize=15)
+    top = 0.97 if title is not None else 0.995
+    fig.tight_layout(rect=(0, 0.045, 1, top))
     fig.savefig(output)
     plt.close(fig)
 
@@ -369,10 +380,11 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
         article_series,
         article_results,
         results_dir / "historical_1976_2014_return_levels.png",
-        title="Article-mentioned locations: JMA annual maxima, 1976–2014",
+        title=None,
         annotate_maximum=True,
         fixed_ylim=(0, 400),
         lettered_titles=True,
+        japanese_labels=True,
     )
     _plot_period_comparison(
         results, period_results, results_dir / "historical_period_comparison.png"
@@ -410,10 +422,11 @@ def render_existing(results_dir: Path, bootstrap_samples: int) -> pd.DataFrame:
         article_series,
         article_results,
         results_dir / "historical_1976_2014_return_levels.png",
-        title="Article-mentioned locations: JMA annual maxima, 1976–2014",
+        title=None,
         annotate_maximum=True,
         fixed_ylim=(0, 400),
         lettered_titles=True,
+        japanese_labels=True,
     )
     _plot_period_comparison(
         results, period_results, results_dir / "historical_period_comparison.png"
