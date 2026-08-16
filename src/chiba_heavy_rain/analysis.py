@@ -14,6 +14,7 @@ import pandas as pd
 from matplotlib.ticker import FixedLocator, FuncFormatter
 
 from .extremes import (
+    GEVFit,
     bootstrap_return_period,
     fit_gev,
     return_level,
@@ -39,6 +40,13 @@ ARTICLE_RETURN_PERIODS = {
     "茂原": "約277年",
     "牛久": "80～150年程度",
     "佐倉": "80～150年程度",
+}
+
+# Rainfall amounts explicitly stated in the article for regions that can be
+# paired directly with one of the four gauges used in the main comparison.
+ARTICLE_ANALYZED_RAINFALL_MM = {
+    "千葉": 362.3,
+    "茂原": 327.5,
 }
 
 
@@ -290,6 +298,32 @@ def _article_comparison_table(period_results: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _article_rainfall_projection_table(period_results: pd.DataFrame) -> pd.DataFrame:
+    """Project article grid rainfall onto the corresponding gauge GEV curve."""
+    rows: list[dict[str, object]] = []
+    for station, article_location in ARTICLE_STATION_LABELS.items():
+        row = period_results.loc[period_results["station"] == station].iloc[0]
+        analyzed_rainfall = ARTICLE_ANALYZED_RAINFALL_MM.get(station)
+        projected_period = np.nan
+        if analyzed_rainfall is not None:
+            fit = GEVFit(
+                shape_xi=float(row["shape_xi"]),
+                location=float(row["location"]),
+                scale=float(row["scale"]),
+            )
+            projected_period = return_period(analyzed_rainfall, fit)
+        rows.append(
+            {
+                "地点": station,
+                "元記事の地域名": article_location.removeprefix("記事地域："),
+                "アメダス24時間降水量（mm）": float(row["event_24h_mm"]),
+                "記事の解析雨量（mm）": analyzed_rainfall,
+                "解析雨量を観測GEV曲線に当てはめた確率年": projected_period,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _article_location_subset(
     results: pd.DataFrame, series: dict[str, pd.DataFrame]
 ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
@@ -406,6 +440,10 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
     period_results.to_csv(results_dir / "historical_1976_2014_return_periods.csv", index=False)
     article_comparison = _article_comparison_table(period_results)
     article_comparison.to_csv(results_dir / "article_location_comparison.csv", index=False)
+    article_rainfall_projection = _article_rainfall_projection_table(period_results)
+    article_rainfall_projection.to_csv(
+        results_dir / "article_rainfall_projection.csv", index=False
+    )
     _configure_plotting()
     _plot_summary(results, results_dir / "return_period_summary.png")
     _plot_return_levels(
@@ -433,6 +471,7 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
         bootstrap_samples,
         period_results,
         article_comparison,
+        article_rainfall_projection,
     )
     return results
 
@@ -458,6 +497,10 @@ def render_existing(results_dir: Path, bootstrap_samples: int) -> pd.DataFrame:
     period_results.to_csv(results_dir / "historical_1976_2014_return_periods.csv", index=False)
     article_comparison = _article_comparison_table(period_results)
     article_comparison.to_csv(results_dir / "article_location_comparison.csv", index=False)
+    article_rainfall_projection = _article_rainfall_projection_table(period_results)
+    article_rainfall_projection.to_csv(
+        results_dir / "article_rainfall_projection.csv", index=False
+    )
     _configure_plotting()
     _plot_summary(results, results_dir / "return_period_summary.png")
     _plot_return_levels(
@@ -485,6 +528,7 @@ def render_existing(results_dir: Path, bootstrap_samples: int) -> pd.DataFrame:
         bootstrap_samples,
         period_results,
         article_comparison,
+        article_rainfall_projection,
     )
     return results
 
@@ -495,6 +539,7 @@ def _write_report(
     bootstrap_samples: int,
     period_results: pd.DataFrame | None = None,
     article_comparison: pd.DataFrame | None = None,
+    article_rainfall_projection: pd.DataFrame | None = None,
 ) -> None:
     eligible = results.loc[results["eligible"]].copy()
     excluded = results.loc[~results["eligible"]].copy()
@@ -522,6 +567,7 @@ def _write_report(
     period_max_station = ""
     period_max_value = float("nan")
     comparison_rows: list[str] = []
+    projection_rows: list[str] = []
     if period_results is not None:
         ordered_period = period_results.loc[
             period_results["station"].isin(ARTICLE_STATION_LABELS)
@@ -544,6 +590,13 @@ def _write_report(
     if article_comparison is not None:
         for row in article_comparison.itertuples(index=False, name=None):
             comparison_rows.append("| " + " | ".join(str(value) for value in row) + " |")
+    if article_rainfall_projection is not None:
+        for row in article_rainfall_projection.itertuples(index=False):
+            analyzed = "—" if pd.isna(row[3]) else f"{float(row[3]):.1f}"
+            projected = "—" if pd.isna(row[4]) else _format_period(float(row[4]))
+            projection_rows.append(
+                f"| {row[0]} | {row[1]} | {float(row[2]):.1f} | {analyzed} | {projected} |"
+            )
     text = f"""# 令和8年8月千葉豪雨：地上観測に基づく24時間雨量の確率年
 
 ## 結論
@@ -571,6 +624,16 @@ def _write_report(
 | 地点 | 計算した確率年（95%区間） | 対応する元記事の地域名 | 元記事の確率年 |
 |---|---:|---|---:|
 {chr(10).join(comparison_rows)}
+
+### 記事の解析雨量を観測GEV曲線で評価した場合
+
+| 地点 | 元記事の地域名 | アメダス24時間降水量（mm） | 記事の解析雨量（mm） | 解析雨量を観測GEV曲線に当てはめた確率年 |
+|---|---|---:|---:|---:|
+{chr(10).join(projection_rows)}
+
+記事本文に地域別の解析雨量が明記された千葉と茂原のみを計算した。千葉市緑区～市原市東部の574.2 mmなどは、今回の4地点に直接対応するアメダス観測所がないため含めていない。解析雨量は格子値、GEV曲線は地点観測値から求めたものであり、この計算も空間代表性の異なる値を組み合わせた参考評価である。
+
+記事の解析雨量を代入した確率年は、千葉で271年、茂原で115年となった。茂原では解析雨量がアメダス雨量より80.0 mm大きいため確率年も長くなるが、それでも元記事の約277年より短い。千葉も元記事の約574年に対して約271年であり、雨量値の違いだけでは元記事との確率年の差を説明できない。
 
 ![記事言及地域の1976～2014年GEV診断](historical_1976_2014_return_levels.png)
 
