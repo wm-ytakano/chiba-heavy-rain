@@ -126,16 +126,22 @@ def _plot_return_levels(
             empirical_period, ordered, s=12, alpha=0.7, color="#555555", label="annual maxima"
         )
         if annotate_maximum:
-            maximum_row = series[station].loc[series[station]["max_24h_mm"].idxmax()]
-            ax.annotate(
-                _year_month_label(maximum_row),
-                xy=(float(empirical_period[-1]), float(ordered[-1])),
-                xytext=(7, -18),
-                textcoords="offset points",
-                fontsize=9,
-                ha="left",
-                arrowprops={"arrowstyle": "-", "color": "#555555", "lw": 0.7},
-            )
+            largest_rows = series[station].nlargest(2, "max_24h_mm")
+            offsets = ((7, -18), (-7, 10))
+            alignments = ("left", "right")
+            for rank, (_, largest_row) in enumerate(largest_rows.iterrows()):
+                ax.annotate(
+                    _year_month_label(largest_row),
+                    xy=(
+                        float(empirical_period[-(rank + 1)]),
+                        float(ordered[-(rank + 1)]),
+                    ),
+                    xytext=offsets[rank],
+                    textcoords="offset points",
+                    fontsize=9,
+                    ha=alignments[rank],
+                    arrowprops={"arrowstyle": "-", "color": "#555555", "lw": 0.7},
+                )
         ax.plot(
             periods,
             return_level(periods, fit),
