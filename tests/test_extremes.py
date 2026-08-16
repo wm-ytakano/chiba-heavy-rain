@@ -6,6 +6,7 @@ from chiba_heavy_rain.analysis import (
     ARTICLE_STATION_LABELS,
     _article_location_subset,
     _historical_period_results,
+    _year_month_label,
 )
 from chiba_heavy_rain.extremes import GEVFit, fit_gev, return_level, return_period
 
@@ -65,3 +66,8 @@ def test_article_plot_subset_contains_only_directly_matched_eligible_stations() 
     selected, selected_series = _article_location_subset(results, series)
     assert set(selected["station"]) == {"茂原", "牛久", "佐倉"}
     assert set(selected_series) == {"茂原", "牛久", "佐倉"}
+
+
+def test_year_month_label_uses_annual_maximum_date() -> None:
+    row = pd.Series({"year": 2013, "date": "10/16 13:50"})
+    assert _year_month_label(row) == "2013年10月"

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import math
+import re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.ticker import FixedLocator, FuncFormatter
 
 from .extremes import (
     bootstrap_return_period,
@@ -61,6 +63,13 @@ def _configure_plotting() -> None:
     )
 
 
+def _year_month_label(row: pd.Series) -> str:
+    match = re.search(r"(\d{1,2})/", str(row["date"]))
+    if match is None:
+        return f"{int(row['year'])}年"
+    return f"{int(row['year'])}年{int(match.group(1))}月"
+
+
 def _plot_summary(results: pd.DataFrame, output: Path) -> None:
     eligible = results.loc[results["eligible"]].sort_values("return_period_years")
     y = np.arange(len(eligible))
@@ -98,12 +107,14 @@ def _plot_return_levels(
     results: pd.DataFrame,
     output: Path,
     title: str = "Observed annual maxima and stationary GEV L-moment fits",
+    annotate_maximum: bool = False,
 ) -> None:
     eligible = results.loc[results["eligible"]].sort_values("station")
     ncols = 2 if len(eligible) <= 4 else 3
     nrows = math.ceil(len(eligible) / ncols)
-    fig, axes = plt.subplots(nrows, ncols, figsize=(13, 3.6 * nrows), squeeze=False)
-    periods = np.geomspace(1.05, 1e5, 500)
+    figure_width = 11 if ncols == 2 else 13
+    fig, axes = plt.subplots(nrows, ncols, figsize=(figure_width, 4.2 * nrows), squeeze=False)
+    periods = np.geomspace(1.05, 1000, 500)
     for ax, (_, row) in zip(axes.ravel(), eligible.iterrows(), strict=False):
         station = str(row["station"])
         values = series[station]["max_24h_mm"].to_numpy(float)
@@ -114,6 +125,17 @@ def _plot_return_levels(
         ax.scatter(
             empirical_period, ordered, s=12, alpha=0.7, color="#555555", label="annual maxima"
         )
+        if annotate_maximum:
+            maximum_row = series[station].loc[series[station]["max_24h_mm"].idxmax()]
+            ax.annotate(
+                _year_month_label(maximum_row),
+                xy=(float(empirical_period[-1]), float(ordered[-1])),
+                xytext=(7, -18),
+                textcoords="offset points",
+                fontsize=9,
+                ha="left",
+                arrowprops={"arrowstyle": "-", "color": "#555555", "lw": 0.7},
+            )
         ax.plot(
             periods,
             return_level(periods, fit),
@@ -131,7 +153,9 @@ def _plot_return_levels(
             label="JMA gauge, Aug 2026",
         )
         ax.set_xscale("log")
-        ax.set_xlim(1, 1e5)
+        ax.set_xlim(1, 1000)
+        ax.xaxis.set_major_locator(FixedLocator([1, 10, 100, 1000]))
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:.0f}"))
         # Keep short-record shape estimates from making the observed range unreadable.
         # The fitted curve may leave the panel at long return periods; that behavior is
         # itself a warning about extrapolation instability.
@@ -324,6 +348,7 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
         article_results,
         results_dir / "historical_1976_2014_return_levels.png",
         title="Article-mentioned locations: JMA annual maxima, 1976–2014",
+        annotate_maximum=True,
     )
     _plot_period_comparison(
         results, period_results, results_dir / "historical_period_comparison.png"
@@ -334,9 +359,7 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
 
 def render_existing(results_dir: Path, bootstrap_samples: int) -> pd.DataFrame:
     """Regenerate report and figures without repeating the bootstrap calculation."""
-    results = pd.read_csv(
-        results_dir / "station_return_periods.csv", dtype={"block_no": str}
-    )
+    results = pd.read_csv(results_dir / "station_return_periods.csv", dtype={"block_no": str})
     annual = pd.read_csv(results_dir / "annual_max_24h.csv")
     historical_series: dict[str, pd.DataFrame] = {}
     for row in results.loc[results["eligible"]].itertuples():
@@ -364,6 +387,7 @@ def render_existing(results_dir: Path, bootstrap_samples: int) -> pd.DataFrame:
         article_results,
         results_dir / "historical_1976_2014_return_levels.png",
         title="Article-mentioned locations: JMA annual maxima, 1976–2014",
+        annotate_maximum=True,
     )
     _plot_period_comparison(
         results, period_results, results_dir / "historical_period_comparison.png"
