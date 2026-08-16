@@ -2,7 +2,11 @@ import numpy as np
 import pandas as pd
 from scipy.stats import genextreme
 
-from chiba_heavy_rain.analysis import _historical_period_results
+from chiba_heavy_rain.analysis import (
+    ARTICLE_STATION_LABELS,
+    _article_location_subset,
+    _historical_period_results,
+)
 from chiba_heavy_rain.extremes import GEVFit, fit_gev, return_level, return_period
 
 
@@ -47,3 +51,17 @@ def test_centered_1995_period_is_1976_through_2014_without_quality_filter() -> N
     assert period.loc[0, "end_year"] == 2014
     assert period.loc[0, "n_years"] == 39
     assert len(series["test"]) == 39
+
+
+def test_article_plot_subset_contains_only_directly_matched_eligible_stations() -> None:
+    stations = [*ARTICLE_STATION_LABELS, "東庄"]
+    results = pd.DataFrame(
+        {
+            "station": stations,
+            "eligible": [False, True, True, True, True],
+        }
+    )
+    series = {station: pd.DataFrame({"max_24h_mm": [1.0]}) for station in set(stations)}
+    selected, selected_series = _article_location_subset(results, series)
+    assert set(selected["station"]) == {"茂原", "牛久", "佐倉"}
+    assert set(selected_series) == {"茂原", "牛久", "佐倉"}

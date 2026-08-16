@@ -5,9 +5,10 @@ Chiba heavy-rain event from JMA ground observations. It uses annual maximum roll
 24-hour rainfall, a stationary GEV distribution fitted by sample L-moments, and
 station-wise nonparametric bootstrap intervals.
 
-The primary fit uses observations only through 2025, so the event being evaluated is
-not also used to estimate its reference distribution. A fit including the 2026 event
-is reported as a sensitivity analysis.
+The primary fit uses the inferred 1976–2014 historical window and displays the four
+eligible JMA gauges directly corresponding to locations named in the Weathernews
+article: Chiba, Mobara, Ushiku (central Ichihara), and Sakura. Fits through 2025 and
+fits including the 2026 event are retained as sensitivity analyses.
 
 ## Run
 
@@ -23,11 +24,12 @@ of every snapshot are recorded in `data/raw/manifest.json`.
 Outputs are written to `results/`, including the Japanese report
 `results/report.md`, tidy CSV files, and diagnostic plots.
 
-The workflow also produces a conditional 1976–2014 fit for the same 13 stations.
-That window is inferred from the article's “39 years centered on 1995” wording and
-the 2014 endpoint of the CMIP6 historical experiment; it is not stated in the
-NEX-GDDP-CMIP6 or NIES2020 source metadata. NIES2020's documented 39-year period
-is instead the 1980–2018 bias-correction reference period.
+The 1976–2014 window is inferred from the article's “39 years centered on 1995”
+wording and the 2014 endpoint of the CMIP6 historical experiment; it is not stated
+in the NEX-GDDP-CMIP6 or NIES2020 source metadata. NIES2020's documented 39-year
+period is instead the 1980–2018 bias-correction reference period. Numerical results
+for all 13 eligible gauges remain available in CSV, but fitting-curve figures show
+only the four article-matched gauges.
 
 ## Interpretation
 

@@ -24,6 +24,13 @@ from .jma import (
 )
 from .stations import STATIONS
 
+ARTICLE_STATION_LABELS = {
+    "千葉": "記事地域：千葉市中央区～若葉区付近",
+    "茂原": "記事地域：茂原市付近",
+    "牛久": "記事地域：市原市中部",
+    "佐倉": "記事地域：八千代・佐倉付近",
+}
+
 
 def _format_period(value: float) -> str:
     if not np.isfinite(value):
@@ -74,7 +81,13 @@ def _plot_summary(results: pd.DataFrame, output: Path) -> None:
         label = _format_period(float(row["return_period_years"]))
         if not np.isfinite(float(row["ci_high"])):
             label += " (CI upper unbounded)"
-        ax.annotate(label, (float(row["return_period_years"]), yi), xytext=(6, 3), textcoords="offset points", fontsize=8)
+        ax.annotate(
+            label,
+            (float(row["return_period_years"]), yi),
+            xytext=(6, 3),
+            textcoords="offset points",
+            fontsize=8,
+        )
     fig.tight_layout()
     fig.savefig(output)
     plt.close(fig)
@@ -87,7 +100,7 @@ def _plot_return_levels(
     title: str = "Observed annual maxima and stationary GEV L-moment fits",
 ) -> None:
     eligible = results.loc[results["eligible"]].sort_values("station")
-    ncols = 3
+    ncols = 2 if len(eligible) <= 4 else 3
     nrows = math.ceil(len(eligible) / ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(13, 3.6 * nrows), squeeze=False)
     periods = np.geomspace(1.05, 1e5, 500)
@@ -98,7 +111,9 @@ def _plot_return_levels(
         ordered = np.sort(values)
         ranks = np.arange(1, len(ordered) + 1)
         empirical_period = (len(ordered) + 0.12) / (len(ordered) - ranks + 0.44)
-        ax.scatter(empirical_period, ordered, s=12, alpha=0.7, color="#555555", label="annual maxima")
+        ax.scatter(
+            empirical_period, ordered, s=12, alpha=0.7, color="#555555", label="annual maxima"
+        )
         ax.plot(
             periods,
             return_level(periods, fit),
@@ -113,7 +128,7 @@ def _plot_return_levels(
             s=95,
             color="#c23b22",
             zorder=5,
-            label="Aug 2026 event",
+            label="JMA gauge, Aug 2026",
         )
         ax.set_xscale("log")
         ax.set_xlim(1, 1e5)
@@ -122,8 +137,9 @@ def _plot_return_levels(
         # itself a warning about extrapolation instability.
         observed_cap = max(float(np.max(ordered)), float(row["event_24h_mm"]))
         ax.set_ylim(0, observed_cap * 1.35)
+        station_label = str(row.get("display_label", station))
         ax.set_title(
-            f"{station}  n={int(row['n_years'])} "
+            f"{station_label}\nJMA {station}  n={int(row['n_years'])} "
             f"({int(row['start_year'])}–{int(row['end_year'])})"
         )
         ax.set_xlabel("Return period (years)")
@@ -133,10 +149,9 @@ def _plot_return_levels(
     for ax in unused_axes:
         ax.axis("off")
     handles, labels = axes.ravel()[0].get_legend_handles_labels()
-    if len(unused_axes):
-        unused_axes[0].legend(handles, labels, loc="center", frameon=False)
+    fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False)
     fig.suptitle(title, y=0.998, fontsize=15)
-    fig.tight_layout(rect=(0, 0, 1, 0.99))
+    fig.tight_layout(rect=(0, 0.045, 1, 0.97))
     fig.savefig(output)
     plt.close(fig)
 
@@ -184,9 +199,19 @@ def _historical_period_results(
     return pd.DataFrame(rows), series
 
 
-def _plot_period_comparison(
-    current: pd.DataFrame, historical: pd.DataFrame, output: Path
-) -> None:
+def _article_location_subset(
+    results: pd.DataFrame, series: dict[str, pd.DataFrame]
+) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+    """Select eligible gauges directly corresponding to locations named in the article."""
+    selected = results.loc[
+        results["eligible"] & results["station"].isin(ARTICLE_STATION_LABELS)
+    ].copy()
+    selected["display_label"] = selected["station"].map(ARTICLE_STATION_LABELS)
+    selected_series = {station: series[station] for station in selected["station"]}
+    return selected, selected_series
+
+
+def _plot_period_comparison(current: pd.DataFrame, historical: pd.DataFrame, output: Path) -> None:
     merged = current.loc[current["eligible"], ["station", "return_period_years"]].merge(
         historical[["station", "return_period_years"]],
         on="station",
@@ -235,9 +260,7 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
         all_annual.append(annual)
         history = latest_contiguous_complete_run(annual, end_year=2025)
         event = parse_event_24h(raw_dir / f"{station.block_no}_event.html")
-        span_years = (
-            int(history["year"].max() - history["year"].min() + 1) if len(history) else 0
-        )
+        span_years = int(history["year"].max() - history["year"].min() + 1) if len(history) else 0
         eligible = len(history) >= 40 and span_years >= 40
         base: dict[str, object] = {
             "station": station.name,
@@ -283,15 +306,24 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
     annual_frame = pd.concat(all_annual, ignore_index=True)
     annual_frame.to_csv(results_dir / "annual_max_24h.csv", index=False)
     period_results, period_series = _historical_period_results(results, annual_frame)
+    article_current_results, article_current_series = _article_location_subset(
+        results, historical_series
+    )
+    article_results, article_series = _article_location_subset(period_results, period_series)
     period_results.to_csv(results_dir / "historical_1976_2014_return_periods.csv", index=False)
     _configure_plotting()
     _plot_summary(results, results_dir / "return_period_summary.png")
-    _plot_return_levels(historical_series, results, results_dir / "return_level_diagnostics.png")
     _plot_return_levels(
-        period_series,
-        period_results,
+        article_current_series,
+        article_current_results,
+        results_dir / "return_level_diagnostics.png",
+        title="Article-mentioned locations: JMA annual maxima through 2025",
+    )
+    _plot_return_levels(
+        article_series,
+        article_results,
         results_dir / "historical_1976_2014_return_levels.png",
-        title="L-moment GEV fits for inferred 1976–2014 window (not specified by source metadata)",
+        title="Article-mentioned locations: JMA annual maxima, 1976–2014",
     )
     _plot_period_comparison(
         results, period_results, results_dir / "historical_period_comparison.png"
@@ -302,7 +334,9 @@ def run(raw_dir: Path, results_dir: Path, refresh: bool, bootstrap_samples: int)
 
 def render_existing(results_dir: Path, bootstrap_samples: int) -> pd.DataFrame:
     """Regenerate report and figures without repeating the bootstrap calculation."""
-    results = pd.read_csv(results_dir / "station_return_periods.csv")
+    results = pd.read_csv(
+        results_dir / "station_return_periods.csv", dtype={"block_no": str}
+    )
     annual = pd.read_csv(results_dir / "annual_max_24h.csv")
     historical_series: dict[str, pd.DataFrame] = {}
     for row in results.loc[results["eligible"]].itertuples():
@@ -312,17 +346,24 @@ def render_existing(results_dir: Path, bootstrap_samples: int) -> pd.DataFrame:
             & annual["usable"]
         ].copy()
     period_results, period_series = _historical_period_results(results, annual)
+    article_current_results, article_current_series = _article_location_subset(
+        results, historical_series
+    )
+    article_results, article_series = _article_location_subset(period_results, period_series)
     period_results.to_csv(results_dir / "historical_1976_2014_return_periods.csv", index=False)
     _configure_plotting()
     _plot_summary(results, results_dir / "return_period_summary.png")
     _plot_return_levels(
-        historical_series, results, results_dir / "return_level_diagnostics.png"
+        article_current_series,
+        article_current_results,
+        results_dir / "return_level_diagnostics.png",
+        title="Article-mentioned locations: JMA annual maxima through 2025",
     )
     _plot_return_levels(
-        period_series,
-        period_results,
+        article_series,
+        article_results,
         results_dir / "historical_1976_2014_return_levels.png",
-        title="L-moment GEV fits for inferred 1976–2014 window (not specified by source metadata)",
+        title="Article-mentioned locations: JMA annual maxima, 1976–2014",
     )
     _plot_period_comparison(
         results, period_results, results_dir / "historical_period_comparison.png"
@@ -354,18 +395,22 @@ def _write_report(
                 included=_format_period(float(row["return_period_including_2026"])),
             )
         )
-    excluded_text = "、".join(
-        f"{row.station}（連続{int(row.n_years)}年）" for row in excluded.itertuples()
-    ) or "なし"
-    extreme_count = int((eligible["return_period_years"] > 10000).sum())
+    excluded_text = (
+        "、".join(f"{row.station}（連続{int(row.n_years)}年）" for row in excluded.itertuples())
+        or "なし"
+    )
     max_row = eligible.iloc[0]
     period_rows: list[str] = []
-    period_summary = ""
+    period_max_station = ""
+    period_max_value = float("nan")
     if period_results is not None:
-        ordered_period = period_results.sort_values("return_period_years", ascending=False)
+        ordered_period = period_results.loc[
+            period_results["station"].isin(ARTICLE_STATION_LABELS)
+        ].sort_values("return_period_years", ascending=False)
         for _, row in ordered_period.iterrows():
             period_rows.append(
-                "| {station} | {years} | {n} | {rain:.1f} | {hist:.1f} | {period} |".format(
+                "| {area} | {station} | {years} | {n} | {rain:.1f} | {hist:.1f} | {period} |".format(
+                    area=ARTICLE_STATION_LABELS[str(row["station"])].removeprefix("記事地域："),
                     station=row["station"],
                     years=f"{int(row['start_year'])}–{int(row['end_year'])}",
                     n=int(row["n_years"]),
@@ -375,21 +420,37 @@ def _write_report(
                 )
             )
         period_max = ordered_period.iloc[0]
-        period_summary = (
-            f"この期間だけで推定した最大の点推定は **{period_max['station']}の"
-            f"{_format_period(float(period_max['return_period_years']))}** だった。"
-        )
+        period_max_station = str(period_max["station"])
+        period_max_value = float(period_max["return_period_years"])
     text = f"""# 令和8年8月千葉豪雨：地上観測に基づく24時間雨量の確率年
 
 ## 結論
 
-気象庁の千葉県内地上観測のうち、JMAの統計切断表示後の同一系列が40年以上あり、利用可能な年最大24時間降水量を40年分以上持つ地点を対象に、標本Lモーメント（PWM）で定常GEV分布を推定した。2026年8月13～15日の観測最大24時間雨量を、事象から独立な2025年までの分布に照らした主解析では、最大の点推定は **{max_row['station']}の{_format_period(float(max_row['return_period_years']))}** だった。1万年を超えた地点は **{extreme_count}地点** である。
+記事文言から推定した **1976～2014年** を主解析期間とし、元記事の地域に直接対応づけられるJMA観測所だけを表示した。標本Lモーメント（PWM）による定常GEVの最大点推定は **{period_max_station}の{_format_period(period_max_value)}** だった。記事対応4地点に1万年を超える推定はない。
 
 ただし、記事の574.2 mmは千葉市緑区～市原市東部の「解析雨量」（格子値）であり、地上観測所の値ではない。今回の地上観測解析は、その574.2 mm自体の確率年を直接検証するものではなく、同じ豪雨を既存観測所で捉えた場合の局地ごとの頻度を示す。両者の空間代表性の違いを無視した一対一比較はできない。
 
-## 地点別結果
+## 主解析：記事言及地域、1976～2014年
 
-主解析の「確率年」は2025年まででGEVを推定した値。95%区間は年最大値を地点ごとに再標本化した非パラメトリック・ブートストラップ（{bootstrap_samples:,}回）のパーセンタイル区間。「2026含む」は今回値を標本に追加して再推定した感度分析である。
+**注意：1976～2014年は元データdescriptionに明記された期間ではない。** 記事の「1995年を中心とする約39年間」を中央年の前後19年と読み、かつCMIP6 historical runが2014年で終わることから逆算した条件付きの推定である。ウェザーニューズが極値統計に実際に切り出した開始・終了年は、記事にも元データdescriptionにも記載されていない。
+
+元データdescriptionを確認すると、NASA NEX-GDDP-CMIP6はhistoricalが1950～2014年、SSPが2015～2100年である。NIES2020で「39年」と明記されるのは極値統計の標本期間ではなく、CDFDMバイアス補正の基準期間 **1980～2018年** で、その内訳はhistorical runの1980～2014年とSSP585 runの2015～2018年である。この1980～2018年を記事の「1995年中心の過去気候期間」と読み替える根拠はないため、本図には採用していない。
+
+期間を固定し、数値が掲載されている年最大24時間雨量を品質記号 `]` も含めて使用した。牛久は観測掲載開始の関係で37値、ほか3地点は39値である。図の赤星は記事の解析雨量ではなく、対応するJMA地上観測所の2026年8月の観測値である。
+
+| 記事の地域 | JMA観測所 | 使用期間 | 年最大値数 | 今回観測値 (mm) | 期間内最大 (mm) | 確率年 |
+|---|---|---:|---:|---:|---:|---:|
+{chr(10).join(period_rows)}
+
+![記事言及地域の1976～2014年GEV診断](historical_1976_2014_return_levels.png)
+
+記事言及地域のうち、千葉市緑区～市原市東部、東金・大網白里、長南・長柄、野田・流山には、今回の選定条件を満たし同一地域と直接みなせるJMA観測所がない。近隣観測所を恣意的に代理せず、フィッティング曲線から除外した。全13適格地点の数値は `historical_1976_2014_return_periods.csv` に残している。
+
+このGEV入力はブロック最大法としての年最大値である。「フィルタなし」は、年最大値の品質記号による除外と地点の再選別を行わない、という意味で実装した。日々の24時間雨量をすべてGEVへ投入するPOT解析ではない。
+
+## 感度分析：各地点の最新連続系列～2025年
+
+記事地域に限定しない全13適格地点について、2025年までの最新連続系列で再推定した。最大点推定は **{max_row["station"]}の{_format_period(float(max_row["return_period_years"]))}** だった。95%区間は年最大値を地点ごとに再標本化した非パラメトリック・ブートストラップ（{bootstrap_samples:,}回）のパーセンタイル区間。「2026含む」は今回値を標本に追加した感度分析である。
 
 | 地点 | 学習期間 | 今回24h (mm) | 既往最大 (mm) | 確率年 | 95%ブートストラップ区間 | 2026含む |
 |---|---:|---:|---:|---:|---:|---:|
@@ -399,25 +460,9 @@ def _write_report(
 
 ![地点別確率年](return_period_summary.png)
 
-![GEV診断](return_level_diagnostics.png)
-
-## 記事文言から推定した期間での再計算（1976～2014年）
-
-**注意：1976～2014年は元データdescriptionに明記された期間ではない。** 記事の「1995年を中心とする約39年間」を中央年の前後19年と読み、かつCMIP6 historical runが2014年で終わることから逆算した条件付きの推定である。ウェザーニューズが極値統計に実際に切り出した開始・終了年は、記事にも元データdescriptionにも記載されていない。
-
-元データdescriptionを確認すると、NASA NEX-GDDP-CMIP6はhistoricalが1950～2014年、SSPが2015～2100年である。NIES2020で「39年」と明記されるのは極値統計の標本期間ではなく、CDFDMバイアス補正の基準期間 **1980～2018年** で、その内訳はhistorical runの1980～2014年とSSP585 runの2015～2018年である。この1980～2018年を記事の「1995年中心の過去気候期間」と読み替える根拠はないため、本図には採用していない。
-
-上記の推定期間に固定し、地点は主解析の13地点から再選別せず、数値が掲載されている年最大24時間雨量を品質記号 `]` も含めて使用した。したがって牛久・坂畑は観測掲載開始の関係で37値、その他は最大39値である。{period_summary}
-
-| 地点 | 使用期間 | 年最大値数 | 今回24h (mm) | 期間内最大 (mm) | 確率年 |
-|---|---:|---:|---:|---:|---:|
-{chr(10).join(period_rows)}
-
-![推定1976～2014年GEV診断](historical_1976_2014_return_levels.png)
+![記事言及地域の最新系列GEV診断](return_level_diagnostics.png)
 
 ![期間による確率年の比較](historical_period_comparison.png)
-
-この追加計算のGEV入力はブロック最大法としての年最大値である。「フィルタなし」は、年最大値の品質記号による除外と地点の再選別を行わない、という意味で実装した。日々の24時間雨量をすべてGEVへ投入するPOT解析ではない。
 
 ## 方法と再現性
 
@@ -457,7 +502,9 @@ def main() -> None:
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
     parser.add_argument("--results-dir", type=Path, default=Path("results"))
     parser.add_argument("--refresh", action="store_true", help="redownload JMA snapshots")
-    parser.add_argument("--bootstrap", type=int, default=500, help="bootstrap replicates per station")
+    parser.add_argument(
+        "--bootstrap", type=int, default=500, help="bootstrap replicates per station"
+    )
     parser.add_argument(
         "--render-only", action="store_true", help="reuse existing CSV results to render outputs"
     )
