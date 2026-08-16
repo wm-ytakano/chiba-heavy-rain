@@ -269,12 +269,6 @@ def _plot_gev(
         )
         marker_points = (
             (
-                float(row["rp_daily_matched"]),
-                float(row["event_daily_mm"]),
-                "#d17c00",
-                "日降水量整合",
-            ),
-            (
                 float(row["rp_24h_matched"]),
                 float(row["event_24h_mm"]),
                 "#1261a0",
