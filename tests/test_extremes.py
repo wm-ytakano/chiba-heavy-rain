@@ -86,8 +86,8 @@ def test_article_comparison_has_requested_four_columns() -> None:
     comparison = _article_comparison_table(results)
     assert comparison.columns.tolist() == [
         "地点",
-        "計算した確率年（95%区間）",
+        "計算した再現期間（95%区間）",
         "元記事の地域名",
-        "元記事の確率年",
+        "元記事の再現期間",
     ]
     assert len(comparison) == 4
