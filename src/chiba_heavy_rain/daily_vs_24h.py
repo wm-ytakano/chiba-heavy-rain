@@ -266,20 +266,20 @@ def _plot_gev(
             return_level(periods, hourly_fit),
             color="#1261a0",
             lw=1.8,
-            label="24時間GEV",
+            label="24時間降水量GEV",
         )
         marker_points = (
             (
                 float(row["rp_24h_matched"]),
                 float(row["event_24h_mm"]),
                 "#1261a0",
-                "24時間降水量整合",
+                "24時間降水量GEV（整合）",
             ),
             (
                 float(row["rp_daily_mismatched"]),
                 float(row["event_24h_mm"]),
                 "#c23b22",
-                "日降水量GEVに24時間降水量",
+                "日降水量GEV（不整合）",
             ),
         )
         marker_x_values = [
