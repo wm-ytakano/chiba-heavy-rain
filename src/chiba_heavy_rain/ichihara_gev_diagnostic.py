@@ -14,7 +14,7 @@ from scipy.io import netcdf_file
 from .extremes import fit_gev, return_level, return_period
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = ROOT / "results/nusdas_2006_2025"
+DATA_DIR = ROOT / "data/processed/nusdas_2006_2025"
 OUTPUT = ROOT / "results/ichihara_gev_fit_diagnostic.png"
 TARGET_LON = 140.10625
 TARGET_LAT = 35.5375

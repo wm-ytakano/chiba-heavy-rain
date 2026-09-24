@@ -171,7 +171,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=None,
                         help="final NetCDF; defaults to the selected event in --output-dir")
-    parser.add_argument("--output-dir", type=Path, default=Path("results/nusdas_2006_2025"))
+    parser.add_argument("--output-dir", type=Path, default=Path("data/processed/nusdas_2006_2025"))
     parser.add_argument("--city-shp", type=Path, default=DEFAULT_CITY_SHP)
     parser.add_argument("--event-start", type=date.fromisoformat, default=EVENT_START)
     parser.add_argument("--event-end", type=date.fromisoformat, default=date(2026, 8, 15))

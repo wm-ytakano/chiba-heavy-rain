@@ -38,4 +38,4 @@
 
 「雨量]」は気象庁表の資料不足値で、既存解析と同じく掲載された数値を使用。「終了時刻不明」は24時間窓の期間内判定ができない地点。∞はGEV分布の上限を事例雨量が超えた推定値。
 
-出典: [気象庁の観測所座標](https://www.data.jma.go.jp/stats/etrn/select/prefecture.php?prec_no=45)、気象庁『過去の気象データ検索』の日別・年別表（URLとSHA-256は `data/raw/manifest.json`）、`results/nusdas_2006_2025/` の事例別NetCDF。詳細値・格子中心座標・終了時刻・品質状態は [`event_comparison_2026.csv`](event_comparison_2026.csv)。
+出典: [気象庁の観測所座標](https://www.data.jma.go.jp/stats/etrn/select/prefecture.php?prec_no=45)、気象庁『過去の気象データ検索』の日別・年別表（URLとSHA-256は `data/raw/manifest.json`）、`data/processed/nusdas_2006_2025/` の事例別NetCDF。詳細値・格子中心座標・終了時刻・品質状態は [`event_comparison_2026.csv`](event_comparison_2026.csv)。

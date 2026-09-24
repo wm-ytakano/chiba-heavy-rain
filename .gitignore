@@ -3,7 +3,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.mplconfig/
 .uv-cache/
 .DS_Store
 results/nusdas_2006_2025/
+data/processed/nusdas_2006_2025/
 results/nusdas_run.log

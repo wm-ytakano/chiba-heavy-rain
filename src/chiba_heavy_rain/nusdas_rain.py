@@ -637,12 +637,13 @@ def _event_names(event_start: date, event_end: date) -> tuple[str, str, str]:
 
 
 def render_chiba_map(
-    final_path: Path, output_dir: Path, event_start: date, event_end: date,
+    final_path: Path, figure_dir: Path, event_start: date, event_end: date,
     city_shp: Path,
 ) -> None:
     """Rebuild the two-panel Chiba map from cached statistics."""
     if not final_path.is_file():
         raise FileNotFoundError(f"computed return-period file missing: {final_path}")
+    figure_dir.mkdir(parents=True, exist_ok=True)
     city_shp = city_shp.resolve(strict=True)
     with netcdf_file(final_path, "r", mmap=False) as dataset:
         lon = dataset.variables["lon"][:].copy()
@@ -658,10 +659,10 @@ def render_chiba_map(
         city_shp, CHIBA_EXTENT,
     )
     _plot_chiba_panels(
-        output_dir / f"return_period_chiba{map_suffix}.png",
+        figure_dir / f"return_period_chiba{map_suffix}.png",
         lon, lat, rainfall, periods, city_segments, prefecture_segments, city_labels,
     )
-    (output_dir / f"return_period_chiba{map_suffix}.md").write_text(
+    (figure_dir / f"return_period_chiba{map_suffix}.md").write_text(
         f"{event_start}～{event_end}の解析雨量RR60による格子別最大24時間降水量"
         "（1時間刻み）と、2006–2025年の年最大値に定常GEVを当てはめた再現期間。"
         "(a)は事例最大値（mm）。区分境界は1、10、20、50、100、200、300、400 mmで、"
@@ -679,7 +680,7 @@ def render_chiba_map(
         "HPColorGuide_202007.pdf\n"
     )
     metadata_name = "metadata.json" if not map_suffix else f"metadata{map_suffix}.json"
-    metadata_path = output_dir / metadata_name
+    metadata_path = final_path.parent / metadata_name
     if metadata_path.is_file():
         metadata = json.loads(metadata_path.read_text())
         metadata["map_panels"] = ["event_max_24h_mm", "return_period_years"]
@@ -734,7 +735,8 @@ def _process_year(db_root: Path, output_dir: Path, year: int) -> tuple[int, int]
 def run(db_root: Path, output_dir: Path, *, first_year: int = 2006,
         last_year: int = 2025, final: bool = True, workers: int = 4,
         event_start: date = EVENT_START, event_end: date = EVENT_END,
-        city_shp: Path = DEFAULT_CITY_SHP) -> None:
+        city_shp: Path = DEFAULT_CITY_SHP,
+        figure_dir: Path = Path("results")) -> None:
     db_root = db_root.resolve(strict=True)
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -796,15 +798,16 @@ def run(db_root: Path, output_dir: Path, *, first_year: int = 2006,
         (output_dir / metadata_name).write_text(
             json.dumps(metadata, ensure_ascii=False, indent=2) + "\n"
         )
-        render_chiba_map(final_path, output_dir, event_start, event_end, city_shp)
+        render_chiba_map(final_path, figure_dir, event_start, event_end, city_shp)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db-root", type=Path, default=Path("/mnt/yt02/db_an.nus"))
     parser.add_argument(
-        "--output-dir", type=Path, default=Path("results/nusdas_2006_2025")
+        "--output-dir", type=Path, default=Path("data/processed/nusdas_2006_2025")
     )
+    parser.add_argument("--figure-dir", type=Path, default=Path("results"))
     parser.add_argument("--first-year", type=int, default=2006)
     parser.add_argument("--last-year", type=int, default=2025)
     parser.add_argument("--annual-only", action="store_true")
@@ -829,14 +832,14 @@ def main() -> None:
         _, final_name, _ = _event_names(args.event_start, args.event_end)
         output_dir = args.output_dir.resolve()
         render_chiba_map(
-            output_dir / final_name, output_dir,
+            output_dir / final_name, args.figure_dir,
             args.event_start, args.event_end, args.city_shp,
         )
         return
     run(args.db_root, args.output_dir, first_year=args.first_year,
         last_year=args.last_year, final=not args.annual_only, workers=args.workers,
         event_start=args.event_start, event_end=args.event_end,
-        city_shp=args.city_shp)
+        city_shp=args.city_shp, figure_dir=args.figure_dir)
 
 
 if __name__ == "__main__":

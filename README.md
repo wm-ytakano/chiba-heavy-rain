@@ -60,8 +60,12 @@ It processes up to four years concurrently by default; use `--workers 1` to
 reduce memory use.
 For a limited initial run, use `--first-year 2006 --last-year 2006 --annual-only`;
 run the default command afterwards to fill the remaining years and produce the
-combined NetCDF, Chiba two-panel map, caption, and metadata in
-`results/nusdas_2006_2025/`. Use `--db-root` and `--output-dir` to change paths.
+combined NetCDF and metadata in `data/processed/nusdas_2006_2025/`. The Chiba
+two-panel map and its caption are written to `results/`, where GitHub can display
+them with `results/report2.md`. The 3.1 GB of local NetCDF and processing records
+in `data/processed/nusdas_2006_2025/` are excluded from Git. A fresh clone needs
+the NuSDaS source data and a computation run to recreate them. Use `--db-root`,
+`--output-dir`, and `--figure-dir` to change these paths.
 For another post-2025 event, pass `--event-start YYYY-MM-DD --event-end YYYY-MM-DD`.
 The command reuses all existing `annual_YYYY.nc` files and gives the new event
 outputs date-specific names; it does not recalculate the historical years.
@@ -120,7 +124,7 @@ PYTHONPATH=src MPLCONFIGDIR=/tmp/chiba-mpl \
 ```
 
 This reads the existing final NetCDF and writes two CSV rankings and a Markdown
-table in `results/nusdas_2006_2025/`. Each row gives the paired value at the
+table in `data/processed/nusdas_2006_2025/`. Each row gives the paired value at the
 selected grid cell, its center coordinates, and the end time of the 24-hour
 window. Grid cells belong to a municipality when their centers lie within its
 boundary. These are maxima of grid-cell point estimates, not return periods of
@@ -129,7 +133,7 @@ municipality-wide rainfall. For another event, use matching `--event-start` and
 
 ## Compare the August and September 2026 events at gauges
 
-After both event NetCDF files exist in `results/nusdas_2006_2025/`, run:
+After both event NetCDF files exist in `data/processed/nusdas_2006_2025/`, run:
 
 ```bash
 MPLCONFIGDIR=/tmp/chiba-mpl .venv/bin/python -m chiba_heavy_rain.event_comparison

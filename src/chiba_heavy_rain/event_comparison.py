@@ -35,6 +35,7 @@ GRID_FILES = {
     EVENTS[0][0]: "nusdas_2006_2025_event_2026.nc",
     EVENTS[1][0]: "nusdas_2006_2025_event_20260919_20260922.nc",
 }
+NUSDAS_DIR = ROOT / "data/processed/nusdas_2006_2025"
 
 
 def station_coordinates(path: Path, stations: tuple[Station, ...]) -> dict[str, tuple[float, float]]:
@@ -164,7 +165,8 @@ def _window_status(day: int, end_text: str, start: date, end: date) -> str:
     ) else "crosses_event_boundary"
 
 
-def build_table(raw_dir: Path, results_dir: Path) -> pd.DataFrame:
+def build_table(raw_dir: Path, results_dir: Path,
+                nusdas_dir: Path = NUSDAS_DIR) -> pd.DataFrame:
     historical = pd.read_csv(results_dir / "historical_1976_2014_return_periods.csv",
                              dtype={"block_no": str})
     august = pd.read_csv(results_dir / "station_return_periods.csv", dtype={"block_no": str})
@@ -185,7 +187,7 @@ def build_table(raw_dir: Path, results_dir: Path) -> pd.DataFrame:
     aug = august.set_index("block_no")
     rows = []
     for tag, start, end in EVENTS:
-        grid = grid_samples(results_dir / "nusdas_2006_2025" / GRID_FILES[tag], coords)
+        grid = grid_samples(nusdas_dir / GRID_FILES[tag], coords)
         for block in eligible.block_no:
             station = stations[block]
             if start.month == 8:
@@ -284,7 +286,7 @@ def write_outputs(table: pd.DataFrame, results_dir: Path,
         "アメダスは各観測所の年最大24時間降水量に定常GEVを適用した点推定。1976–2014年列は既存解析の数値・標本を使用し、牛久・坂畑は37年、その他は39年。2006–2025年列は各地点20年の数値を使用。2026年の事例値は推定標本に含めない。", "",
         "解析雨量はRR60の1時間雨量による24時間最大値を最近傍格子で抽出し、同格子の2006–2025年の年最大値にGEVを適用した点推定。格子値と地上観測は空間代表性が異なる。アメダスの日別最大24時間窓と、解析雨量の事例期間内に完全に収まる窓は必ずしも同一ではない。", "",
         "「雨量]」は気象庁表の資料不足値で、既存解析と同じく掲載された数値を使用。「終了時刻不明」は24時間窓の期間内判定ができない地点。∞はGEV分布の上限を事例雨量が超えた推定値。", "",
-        f"出典: [気象庁の観測所座標]({COORD_URL})、気象庁『過去の気象データ検索』の日別・年別表（URLとSHA-256は `data/raw/manifest.json`）、`results/nusdas_2006_2025/` の事例別NetCDF。詳細値・格子中心座標・終了時刻・品質状態は [`{csv_path.name}`]({csv_path.name})。", "",
+        f"出典: [気象庁の観測所座標]({COORD_URL})、気象庁『過去の気象データ検索』の日別・年別表（URLとSHA-256は `data/raw/manifest.json`）、`data/processed/nusdas_2006_2025/` の事例別NetCDF。詳細値・格子中心座標・終了時刻・品質状態は [`{csv_path.name}`]({csv_path.name})。", "",
     ])
     md_path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -293,6 +295,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", type=Path, default=ROOT / "data/raw")
     parser.add_argument("--results-dir", type=Path, default=ROOT / "results")
+    parser.add_argument("--nusdas-dir", type=Path, default=NUSDAS_DIR)
     parser.add_argument("--refresh-inputs", action="store_true")
     parser.add_argument("--rank-by", choices=RANK_COLUMNS, default="grid")
     parser.add_argument("--top-n", type=int, default=10)
@@ -302,7 +305,7 @@ def main() -> None:
     blocks = set(historical.loc[historical.eligible, "block_no"])
     ensure_inputs(args.raw_dir, tuple(station for station in STATIONS
                                       if station.block_no in blocks), args.refresh_inputs)
-    write_outputs(build_table(args.raw_dir, args.results_dir), args.results_dir,
+    write_outputs(build_table(args.raw_dir, args.results_dir, args.nusdas_dir), args.results_dir,
                   rank_by=args.rank_by, top_n=args.top_n)
 
 
