@@ -87,7 +87,8 @@ for **hourly** rainfall. Values below 1 mm and missing values are white;
 the right colorbar extension marks values above 400 mm. Panel (b) uses
 `inferno_r` with boundaries at 10, 20, 50, 100, 200, 500, 1,000, 2,000,
 5,000, and 10,000 years. Values below 10 years and missing values are white;
-the right extension marks values above 10,000 years.
+the right extension marks values above 10,000 years, including infinite values
+when an event exceeds a fitted GEV upper endpoint.
 
 Both panels use the municipal and related boundaries in `data/city/city.shp` (WGS84),
 with thicker prefecture borders formed by dissolving municipalities according

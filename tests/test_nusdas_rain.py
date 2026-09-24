@@ -9,6 +9,7 @@ from chiba_heavy_rain.nusdas_rain import (
     RollingMaximum,
     _dissolved_prefecture_segments,
     _geometry_segments,
+    _map_display_values,
     _rainfall_color_scale,
     _return_period_color_scale,
     _write_field,
@@ -54,6 +55,15 @@ def test_return_period_color_scale_has_white_under_and_extended_upper_bin() -> N
     assert norm(np.nextafter(10000.0, np.inf)) == cmap.N
     masked = np.ma.masked_invalid(np.array([np.nan]))
     np.testing.assert_allclose(cmap(norm(masked))[0], [1, 1, 1, 1])
+
+
+def test_infinite_return_period_uses_upper_extension_instead_of_missing_white() -> None:
+    cmap, norm, _ = _return_period_color_scale()
+    display = _map_display_values(np.array([np.nan, 5.0, np.inf]), norm)
+    assert display.mask.tolist() == [True, False, False]
+    np.testing.assert_allclose(cmap(norm(display))[0], [1, 1, 1, 1])
+    np.testing.assert_allclose(cmap(norm(display))[1], [1, 1, 1, 1])
+    np.testing.assert_allclose(cmap(norm(display))[2], cmap.get_over())
 
 
 def test_jma_rainfall_colors_and_24h_thresholds() -> None:

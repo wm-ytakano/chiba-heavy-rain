@@ -502,6 +502,12 @@ def _rainfall_color_scale():
     return cmap, BoundaryNorm(bounds, cmap.N, clip=False), bounds
 
 
+def _map_display_values(values: np.ndarray, norm: BoundaryNorm) -> np.ma.MaskedArray:
+    """Show positive infinite return periods in the upper colorbar extension."""
+    display = np.where(np.isposinf(values), norm.boundaries[-1] * 2, values)
+    return np.ma.masked_invalid(display)
+
+
 def _draw_chiba_panel(ax, lon: np.ndarray, lat: np.ndarray, values: np.ndarray,
                       cmap, norm, title: str, city_segments: list[np.ndarray],
                       prefecture_segments: list[np.ndarray],
@@ -511,7 +517,7 @@ def _draw_chiba_panel(ax, lon: np.ndarray, lat: np.ndarray, values: np.ndarray,
 
     data_crs = ccrs.PlateCarree()
     image = ax.pcolormesh(
-        lon, lat, np.ma.masked_invalid(values), shading="auto", cmap=cmap,
+        lon, lat, _map_display_values(values, norm), shading="auto", cmap=cmap,
         norm=norm, transform=data_crs,
     )
     ax.set_extent(CHIBA_EXTENT, crs=data_crs)
@@ -663,7 +669,8 @@ def render_chiba_map(
         "気象庁の2020年配色指針・表2-1の解析雨量8色を、この24時間雨量の区分に順に割り当てた。"
         "元の気象庁の区分は1時間雨量用であり、この図の閾値とは異なる。"
         "(b)は格子別再現期間（年）。inferno_rの区分境界は10、20、50、100、200、500、"
-        "1,000、2,000、5,000、10,000年。10,000年超は右端の延長、10年未満・推定不能は白。"
+        "1,000、2,000、5,000、10,000年。10,000年超とGEV上限を超えた∞は右端の延長、"
+        "10年未満・推定不能は白。"
         "両図ともメルカトル図法、東経139.6–140.9°・北緯34.8–36.2°。"
         "細い黒線は千葉県内の市区町村境界のみ。太い黒線（白縁）はcity.shpを"
         "regioncode先頭2桁で結合した都道府県境界。"
