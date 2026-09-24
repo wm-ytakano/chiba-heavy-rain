@@ -110,6 +110,22 @@ MPLCONFIGDIR=/tmp/chiba-mpl .venv/bin/python -m chiba_heavy_rain.nusdas_rain --r
 
 Use `--city-shp` to specify another city shapefile with the same coordinate system.
 
+To rank Chiba's 54 municipalities (with Chiba City counted as one city) by the largest
+grid-cell rainfall and, separately, by the largest grid-cell return period, run:
+
+```bash
+PYTHONPATH=src MPLCONFIGDIR=/tmp/chiba-mpl \
+  .venv/bin/python -m chiba_heavy_rain.municipal_rankings
+```
+
+This reads the existing final NetCDF and writes two CSV rankings and a Markdown
+table in `results/nusdas_2006_2025/`. Each row gives the paired value at the
+selected grid cell, its center coordinates, and the end time of the 24-hour
+window. Grid cells belong to a municipality when their centers lie within its
+boundary. These are maxima of grid-cell point estimates, not return periods of
+municipality-wide rainfall. For another event, use matching `--event-start` and
+`--event-end`; the output files receive an event-date suffix.
+
 The 1976–2014 window is inferred from the article's “39 years centered on 1995”
 wording and the 2014 endpoint of the CMIP6 historical experiment; it is not stated
 in the NEX-GDDP-CMIP6 or NIES2020 source metadata. NIES2020's documented 39-year
