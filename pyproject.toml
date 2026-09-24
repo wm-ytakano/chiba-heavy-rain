@@ -5,7 +5,9 @@ description = "GEV return-period analysis of the August 2026 Chiba heavy rainfal
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "adjusttext>=1.3",
   "beautifulsoup4>=4.13",
+  "cartopy>=0.23",
   "httpx>=0.28",
   "lxml>=5.4",
   "matplotlib>=3.10",
@@ -23,6 +25,7 @@ dev = [
 [project.scripts]
 chiba-rain = "chiba_heavy_rain.analysis:main"
 chiba-rain-daily-vs-24h = "chiba_heavy_rain.daily_vs_24h:main"
+chiba-rain-nusdas = "chiba_heavy_rain.nusdas_rain:main"
 
 [build-system]
 requires = ["hatchling"]
