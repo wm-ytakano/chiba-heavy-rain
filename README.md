@@ -127,6 +127,31 @@ boundary. These are maxima of grid-cell point estimates, not return periods of
 municipality-wide rainfall. For another event, use matching `--event-start` and
 `--event-end`; the output files receive an event-date suffix.
 
+## Compare the August and September 2026 events at gauges
+
+After both event NetCDF files exist in `results/nusdas_2006_2025/`, run:
+
+```bash
+MPLCONFIGDIR=/tmp/chiba-mpl .venv/bin/python -m chiba_heavy_rain.event_comparison
+```
+
+This writes `results/event_comparison_2026.csv` and `.md` for the 13 stations
+eligible in the existing 1976–2014 analysis. The August gauge values and that
+period's return periods come from existing CSV files. September's gauge values
+come from cached JMA daily 24-hour rainfall tables. The command downloads missing
+September tables and the JMA Chiba station-coordinate page, and records URLs and
+SHA-256 hashes in `data/raw/manifest.json`; `--refresh-inputs` replaces those
+snapshots. The table also fits the same L-moment GEV to each gauge's 20 numeric
+annual maxima from 2006–2025, then evaluates each 2026 event outside the fit.
+The analyzed-rainfall columns sample the nearest grid center to each gauge from
+the existing event NetCDF files. Station coordinates are the current JMA
+coordinates on the cached selection page. The CSV retains the coordinates,
+distance, quality marks, and window-boundary status needed to audit each row.
+The Markdown view has separate August and September tables, each showing the
+top 10 stations ranked by the analyzed-rainfall grid-cell return period. The
+CSV retains all 13 stations per event. Use `--top-n` or `--rank-by` to change
+the view without changing the CSV values.
+
 The 1976–2014 window is inferred from the article's “39 years centered on 1995”
 wording and the 2014 endpoint of the CMIP6 historical experiment; it is not stated
 in the NEX-GDDP-CMIP6 or NIES2020 source metadata. NIES2020's documented 39-year

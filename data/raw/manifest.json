@@ -54,6 +54,15 @@
     "sha256": "80271f568307ffef4bb0cc7d786ca895c59d9b444e88248a4c54cb0fb35bd33f"
   },
   {
+    "block_no": "0377",
+    "name": "東庄",
+    "kind": "a",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=0377&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/0377_event_202609.html",
+    "sha256": "ca305a57f8730b7d56284ee49ff4739a865359418b86cbe63e85bc0291e4c89f"
+  },
+  {
     "block_no": "0378",
     "name": "成田",
     "kind": "a",
@@ -102,6 +111,15 @@
     "block_no": "0381",
     "name": "茂原",
     "kind": "a",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=0381&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/0381_event_202609.html",
+    "sha256": "ce78cb010bf60853dc94851e0eff70c69c6f7f1e2e87bcc2cb870469e36c0c1f"
+  },
+  {
+    "block_no": "0381",
+    "name": "茂原",
+    "kind": "a",
     "table": "event_daily",
     "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=0381&year=2026&month=8&day=&view=p1",
     "path": "data/raw/0381_event_daily.html",
@@ -144,6 +162,15 @@
     "sha256": "edc98f6867f7f4934485889c762c8e6ada00a23fa9fdb2ff584af0d3475911d6"
   },
   {
+    "block_no": "0383",
+    "name": "鋸南",
+    "kind": "a",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=0383&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/0383_event_202609.html",
+    "sha256": "fc35ef29691ba7a985fb6a3a8c09a1af3a2de8488497a79c9a8de874447964df"
+  },
+  {
     "block_no": "0384",
     "name": "鴨川",
     "kind": "a",
@@ -160,6 +187,15 @@
     "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=0384&year=2026&month=8&day=&view=a5",
     "path": "data/raw/0384_event.html",
     "sha256": "01919a2baad732fbf6f0f1e766a21b30e00f2624eedac05ff886559292922b70"
+  },
+  {
+    "block_no": "0384",
+    "name": "鴨川",
+    "kind": "a",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=0384&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/0384_event_202609.html",
+    "sha256": "ad984d01a1382b1c35fa41af366a1c5c077fc96f3d8562908070fa60dde681c2"
   },
   {
     "block_no": "0916",
@@ -192,6 +228,15 @@
     "block_no": "0916",
     "name": "佐倉",
     "kind": "a",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=0916&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/0916_event_202609.html",
+    "sha256": "add3b2587d12fc93dc3aa67d4ea88592de0884d4c48a4c83de61544d8577c1a9"
+  },
+  {
+    "block_no": "0916",
+    "name": "佐倉",
+    "kind": "a",
     "table": "event_daily",
     "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=0916&year=2026&month=8&day=&view=p1",
     "path": "data/raw/0916_event_daily.html",
@@ -216,6 +261,15 @@
     "sha256": "56a3ac2a38e1e1487481b78c9a9fb5149e282c388dd69ee32e2ad60f3e938ed2"
   },
   {
+    "block_no": "1003",
+    "name": "横芝光",
+    "kind": "a",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=1003&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/1003_event_202609.html",
+    "sha256": "a6c87394037b39877378ad0c0ea9f971e4d808a1aeb197554bc0be47c93ceea6"
+  },
+  {
     "block_no": "1004",
     "name": "大多喜",
     "kind": "a",
@@ -232,6 +286,15 @@
     "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=1004&year=2026&month=8&day=&view=a5",
     "path": "data/raw/1004_event.html",
     "sha256": "0c6a2513444a827b0adf13308de0dd29bd0bbeec0013793005573789a0ce4806"
+  },
+  {
+    "block_no": "1004",
+    "name": "大多喜",
+    "kind": "a",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=1004&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/1004_event_202609.html",
+    "sha256": "728cf2a27174a30cafcb90a29ac7cf865f7f8e698467baec7325a841955e8bee"
   },
   {
     "block_no": "1236",
@@ -282,6 +345,15 @@
     "block_no": "1238",
     "name": "牛久",
     "kind": "a",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=1238&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/1238_event_202609.html",
+    "sha256": "8cbb65e04c486d4ebabda8bd3791ba2bf96363253fc20032765a173806d3da79"
+  },
+  {
+    "block_no": "1238",
+    "name": "牛久",
+    "kind": "a",
     "table": "event_daily",
     "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=1238&year=2026&month=8&day=&view=p1",
     "path": "data/raw/1238_event_daily.html",
@@ -306,6 +378,15 @@
     "sha256": "89f0808eb7a535632b11764b34650b6a913667d00abe0a658bbfb059c7a23cad"
   },
   {
+    "block_no": "1241",
+    "name": "坂畑",
+    "kind": "a",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_a1.php?prec_no=45&block_no=1241&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/1241_event_202609.html",
+    "sha256": "a756cb55248b752a34847e806ba7e4710fa63fe8d1b8d3913de81fe3ce3a05d8"
+  },
+  {
     "block_no": "47648",
     "name": "銚子",
     "kind": "s",
@@ -322,6 +403,15 @@
     "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_s1.php?prec_no=45&block_no=47648&year=2026&month=8&day=&view=a5",
     "path": "data/raw/47648_event.html",
     "sha256": "447927bd2196c240434d9478c81103be1544c4e8f99bfa7ce15415f521706571"
+  },
+  {
+    "block_no": "47648",
+    "name": "銚子",
+    "kind": "s",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_s1.php?prec_no=45&block_no=47648&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/47648_event_202609.html",
+    "sha256": "040dea0c6ef04c50d2a45b35506bd9850b1676bca5a8fe765f47cf44cc1b6908"
   },
   {
     "block_no": "47672",
@@ -342,6 +432,15 @@
     "sha256": "89d900ac449ca9db9ca70cec894fd381cd17813d445b36a3ed35fbc2357d4d12"
   },
   {
+    "block_no": "47672",
+    "name": "館山",
+    "kind": "s",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_s1.php?prec_no=45&block_no=47672&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/47672_event_202609.html",
+    "sha256": "dbc96238a04959db2cf486f38bd9242c0ce484cf281c1c85ba938e3f163a12d6"
+  },
+  {
     "block_no": "47674",
     "name": "勝浦",
     "kind": "s",
@@ -358,6 +457,15 @@
     "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_s1.php?prec_no=45&block_no=47674&year=2026&month=8&day=&view=a5",
     "path": "data/raw/47674_event.html",
     "sha256": "f792e0499134277e55b788538828a511ce67d703d0dfb553663ca51ea67b6361"
+  },
+  {
+    "block_no": "47674",
+    "name": "勝浦",
+    "kind": "s",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_s1.php?prec_no=45&block_no=47674&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/47674_event_202609.html",
+    "sha256": "c71d420582a4d86176d83982007ce734b8615fc7f12b8e5d88d0153643d564da"
   },
   {
     "block_no": "47682",
@@ -390,9 +498,27 @@
     "block_no": "47682",
     "name": "千葉",
     "kind": "s",
+    "table": "event_202609",
+    "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_s1.php?prec_no=45&block_no=47682&year=2026&month=9&day=&view=a5",
+    "path": "data/raw/47682_event_202609.html",
+    "sha256": "d5b17dba28bdda38872f3d22d53cbf17a2f0dab6a52b605a552a4cb7a693830c"
+  },
+  {
+    "block_no": "47682",
+    "name": "千葉",
+    "kind": "s",
     "table": "event_daily",
     "url": "https://www.data.jma.go.jp/stats/etrn/view/daily_s1.php?prec_no=45&block_no=47682&year=2026&month=8&day=&view=p1",
     "path": "data/raw/47682_event_daily.html",
     "sha256": "74b6a7c85edb644c992d1c74afd6390fe70d66750aa754a985648f239c1c628e"
+  },
+  {
+    "block_no": "chiba",
+    "name": "千葉県地点一覧",
+    "kind": "metadata",
+    "table": "station_coordinates",
+    "url": "https://www.data.jma.go.jp/stats/etrn/select/prefecture.php?prec_no=45",
+    "path": "data/raw/stations_chiba_202609.html",
+    "sha256": "52189779dbcd58a41b5d474aed9433d334329b5a66994a067ef1d4f7c6d7455a"
   }
 ]

@@ -27,6 +27,7 @@ chiba-rain = "chiba_heavy_rain.analysis:main"
 chiba-rain-daily-vs-24h = "chiba_heavy_rain.daily_vs_24h:main"
 chiba-rain-nusdas = "chiba_heavy_rain.nusdas_rain:main"
 chiba-rain-municipal-rankings = "chiba_heavy_rain.municipal_rankings:main"
+chiba-rain-event-comparison = "chiba_heavy_rain.event_comparison:main"
 
 [build-system]
 requires = ["hatchling"]
