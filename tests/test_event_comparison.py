@@ -37,7 +37,9 @@ def test_event_window_boundary_and_unknown_end_time() -> None:
     assert _window_status(13, "10:00", start, end) == "crosses_event_boundary"
     assert _window_status(14, "00:00", start, end) == "within_event"
     assert _window_status(15, "24:00", start, end) == "within_event"
-    assert _window_status(14, "///", start, end) == "end_time_unknown"
+    assert _window_status(13, "///", start, end) == "end_time_unknown"
+    assert _window_status(14, "///", start, end) == "within_event"
+    assert _window_status(15, "///", start, end) == "within_event"
 
 
 def test_markdown_shows_two_top_ten_rankings_and_csv_keeps_all(tmp_path: Path) -> None:

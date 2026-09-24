@@ -150,12 +150,16 @@ def ensure_inputs(raw_dir: Path, stations: tuple[Station, ...], refresh: bool = 
 
 
 def _window_status(day: int, end_text: str, start: date, end: date) -> str:
+    # A daily-table window ends within its day, so it starts after the previous
+    # midnight; without an end time, only a first-day window can cross the start.
+    fallback = "within_event" if start < date(start.year, start.month, day) <= end else (
+        "end_time_unknown")
     match = re.fullmatch(r"(\d{1,2}):(\d{2})", end_text)
     if match is None:
-        return "end_time_unknown"
+        return fallback
     hour, minute = map(int, match.groups())
     if hour > 24 or minute > 59 or (hour == 24 and minute != 0):
-        return "end_time_unknown"
+        return fallback
     jst = timezone(timedelta(hours=9))
     ending = datetime(start.year, start.month, day, tzinfo=jst) + timedelta(
         hours=hour, minutes=minute)

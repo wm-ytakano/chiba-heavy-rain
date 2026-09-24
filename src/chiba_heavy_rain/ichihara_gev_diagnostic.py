@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
 import matplotlib
@@ -11,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io import netcdf_file
 
-from .extremes import fit_gev, return_level, return_period
+from .extremes import bootstrap_return_period, fit_gev, return_level, return_period
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data/processed/nusdas_2006_2025"
@@ -19,6 +20,8 @@ OUTPUT = ROOT / "results/ichihara_gev_fit_diagnostic.png"
 TARGET_LON = 140.10625
 TARGET_LAT = 35.5375
 NEIGHBOR_LAT = TARGET_LAT - 1 / 120
+BOOTSTRAP_SAMPLES = 2000
+BOOTSTRAP_SEED = 20260813
 
 
 def _read_cell(path: Path, target_lat: float) -> tuple[np.ndarray, float, dict[str, float]]:
@@ -39,6 +42,25 @@ def _read_cell(path: Path, target_lat: float) -> tuple[np.ndarray, float, dict[s
     return annual, event, fitted
 
 
+def _bootstrap_level_band(annual: np.ndarray, periods: np.ndarray) -> np.ndarray:
+    # Same seed and draw sequence as bootstrap_return_period, so both use one resample set.
+    rng = np.random.default_rng(BOOTSTRAP_SEED)
+    levels = []
+    for _ in range(BOOTSTRAP_SAMPLES):
+        draw = rng.choice(annual, size=len(annual), replace=True)
+        try:
+            levels.append(return_level(periods, fit_gev(draw)))
+        except (ValueError, RuntimeError, FloatingPointError):
+            continue
+    return np.percentile(np.asarray(levels), [2.5, 97.5], axis=0)
+
+
+def _format_period(value: float) -> str:
+    if not np.isfinite(value):
+        return "∞"
+    return f"{value:,.0f}" if value >= 100 else f"{value:.1f}"
+
+
 def main() -> None:
     august = DATA_DIR / "nusdas_2006_2025_event_2026.nc"
     september = DATA_DIR / "nusdas_2006_2025_event_20260919_20260922.nc"
@@ -53,6 +75,7 @@ def main() -> None:
     periods = np.geomspace(1.01, 1e6, 800)
     fig, axes = plt.subplots(1, 2, figsize=(14, 5.5), dpi=180, constrained_layout=True)
     summaries = []
+    rows = []
     for ax, target_lat, title in zip(
         axes,
         (TARGET_LAT, NEIGHBOR_LAT),
@@ -89,6 +112,17 @@ def main() -> None:
             zorder=3,
             label="年最大24時間降水量（20年）",
         )
+        band = _bootstrap_level_band(annual, periods)
+        ax.fill_between(
+            periods,
+            band[0],
+            band[1],
+            color="#6699bd",
+            alpha=0.2,
+            linewidth=0,
+            zorder=1,
+            label=f"GEVの95%区間（ブートストラップ{BOOTSTRAP_SAMPLES:,}回）",
+        )
         ax.plot(
             periods,
             return_level(periods, fit),
@@ -115,30 +149,62 @@ def main() -> None:
             [1, 10, 100, 1000, 10000, 100000, 1000000],
             labels=["1", "10", "100", "千", "1万", "10万", "100万"],
         )
-        ax.scatter(
-            september_period,
-            september_rain,
-            marker="*",
-            s=220,
-            color="#e69a23",
-            edgecolor="0.2",
-            linewidth=0.5,
-            zorder=6,
-            label=f"2026年9月 {september_period:,.0f}年",
-        )
-        ax.scatter(
-            august_period,
-            august_rain,
-            marker="*",
-            s=220,
-            color="#c34636",
-            edgecolor="0.2",
-            linewidth=0.5,
-            zorder=6,
-            label=f"2026年8月 {august_period:,.0f}年",
-        )
-        ax.legend(loc="lower right", fontsize=10, framealpha=0.95)
         summaries.append((fit.shape_xi, august_period, september_period))
+        # A negative shape gives a finite GEV upper endpoint.
+        upper_bound = fit.location - fit.scale / fit.shape_xi if fit.shape_xi < 0 else np.inf
+        x_max = ax.get_xlim()[1]
+        for event, month, rain, period, color in (
+            ("2026-09-19_2026-09-22", "9月", september_rain, september_period, "#e69a23"),
+            ("2026-08-13_2026-08-15", "8月", august_rain, august_period, "#c34636"),
+        ):
+            interval = bootstrap_return_period(annual, rain, BOOTSTRAP_SAMPLES, BOOTSTRAP_SEED)
+            low, high = interval["ci_low"], interval["ci_high"]
+            # An infinite upper limit runs to the axis edge and ends in an arrowhead.
+            ax.plot(
+                [low, min(high, x_max)],
+                [rain, rain],
+                color=color,
+                lw=2,
+                marker="|",
+                markevery=[0],
+                markersize=10,
+                markeredgewidth=2,
+                zorder=5,
+            )
+            if not np.isfinite(high):
+                ax.plot(x_max, rain, marker=">", color=color, markersize=8, clip_on=False, zorder=5)
+            ax.scatter(
+                period,
+                rain,
+                marker="*",
+                s=220,
+                color=color,
+                edgecolor="0.2",
+                linewidth=0.5,
+                zorder=6,
+                label=(
+                    f"2026年{month} {_format_period(period)}年"
+                    f"（95%区間 {_format_period(low)}～{_format_period(high)}年）"
+                ),
+            )
+            rows.append(
+                {
+                    "cell": "target" if target_lat == TARGET_LAT else "south_neighbor",
+                    "latitude": round(target_lat, 5),
+                    "longitude": TARGET_LON,
+                    "event": event,
+                    "event_max_24h_mm": round(rain, 1),
+                    "sample_max_24h_mm": round(float(annual.max()), 1),
+                    "shape_xi": fit.shape_xi,
+                    "location": fit.location,
+                    "scale": fit.scale,
+                    "upper_bound_mm": upper_bound,
+                    "return_period_years": period,
+                    "bootstrap_samples": BOOTSTRAP_SAMPLES,
+                    **interval,
+                }
+            )
+        ax.legend(loc="lower right", fontsize=10, framealpha=0.95)
     fig.savefig(OUTPUT, dpi=180)
     plt.close(fig)
     caption = (
@@ -148,16 +214,28 @@ def main() -> None:
         "再現期間が最長（8月約485年、9月約996年）。青点は2006–2025年の年最大24時間降水量を"
         "昇順に並べ、report.md図1と同じGringortenプロット位置 "
         "`(n+0.12)/(n-rank+0.44)` に置いた値。青線は同じ20値にLモーメント法で当てはめた"
-        "定常GEV分布の再現水準。星は推定に使っていない2026年の事例値。"
+        "定常GEV分布の再現水準、薄青の帯は20値を復元抽出して2,000回再推定したブートストラップの"
+        "95%区間。星は推定に使っていない2026年の事例値で、横線はその再現期間の95%区間"
+        "（右端の矢印は上限が∞）。"
         "横軸は推定再現期間まで対数軸を延ばした。"
         "GEV形状母数 ξ は (a) −0.183、(b) −0.140。20年の標本から長い再現期間へ外挿した点推定であり、"
         "図だけで適合度検定の結論は出せない。\n"
     )
     OUTPUT.with_suffix(".md").write_text(caption, encoding="utf-8")
+    with OUTPUT.with_suffix(".csv").open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(sorted(rows, key=lambda row: (row["cell"] != "target", row["event"])))
     for title, (xi, august_period, september_period) in zip(
         ("target", "south neighbor"), summaries, strict=True
     ):
         print(f"{title}: xi={xi:.6f}, August={august_period:.1f}, September={september_period:.1f}")
+    for row in rows:
+        print(
+            f"{row['cell']} {row['event']}: upper={row['upper_bound_mm']:.1f} mm, "
+            f"95% CI={row['ci_low']:.1f}-{row['ci_high']:.1f}, "
+            f"infinite={row['bootstrap_infinite']}/{row['bootstrap_valid']}"
+        )
     print(OUTPUT)
 
 
