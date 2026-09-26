@@ -63,7 +63,6 @@ def _format_period(value: float) -> str:
 
 def main() -> None:
     august = DATA_DIR / "nusdas_2006_2025_event_2026.nc"
-    september = DATA_DIR / "nusdas_2006_2025_event_20260919_20260922.nc"
     plt.rcParams.update(
         {
             "font.family": "sans-serif",
@@ -83,17 +82,13 @@ def main() -> None:
         strict=True,
     ):
         annual, august_rain, saved_august = _read_cell(august, target_lat)
-        annual_september, september_rain, saved_september = _read_cell(september, target_lat)
-        if not np.array_equal(annual, annual_september) or not np.isfinite(annual).all():
-            raise ValueError("the two events do not share 20 complete annual maxima")
+        if not np.isfinite(annual).all():
+            raise ValueError("the cell does not have 20 complete annual maxima")
         fit = fit_gev(annual)
         august_period = return_period(august_rain, fit)
-        september_period = return_period(september_rain, fit)
         for saved, calculated in (
             (saved_august["shape_xi"], fit.shape_xi),
-            (saved_september["shape_xi"], fit.shape_xi),
             (saved_august["return_period_years"], august_period),
-            (saved_september["return_period_years"], september_period),
         ):
             if not np.isclose(saved, calculated, rtol=1e-4, atol=1e-5):
                 raise ValueError(f"saved fit differs from recalculation: {saved} vs {calculated}")
@@ -149,12 +144,11 @@ def main() -> None:
             [1, 10, 100, 1000, 10000, 100000, 1000000],
             labels=["1", "10", "100", "千", "1万", "10万", "100万"],
         )
-        summaries.append((fit.shape_xi, august_period, september_period))
+        summaries.append((fit.shape_xi, august_period))
         # A negative shape gives a finite GEV upper endpoint.
         upper_bound = fit.location - fit.scale / fit.shape_xi if fit.shape_xi < 0 else np.inf
         x_max = ax.get_xlim()[1]
         for event, month, rain, period, color in (
-            ("2026-09-19_2026-09-22", "9月", september_rain, september_period, "#e69a23"),
             ("2026-08-13_2026-08-15", "8月", august_rain, august_period, "#c34636"),
         ):
             interval = bootstrap_return_period(annual, rain, BOOTSTRAP_SAMPLES, BOOTSTRAP_SEED)
@@ -210,12 +204,12 @@ def main() -> None:
     caption = (
         "# 市原市北部の対象格子と南隣格子におけるGEVフィットの比較\n\n"
         "(a) の格子中心は東経140.10625°、北緯35.5375°。"
-        "(b) は南隣の東経140.10625°、北緯35.52917°で、隣接8格子のうち両事例とも"
-        "再現期間が最長（8月約485年、9月約996年）。青点は2006–2025年の年最大24時間降水量を"
+        "(b) は南隣の東経140.10625°、北緯35.52917°で、隣接8格子のうち"
+        "再現期間が最長（約485年）。青点は2006–2025年の年最大24時間降水量を"
         "昇順に並べ、report.md図1と同じGringortenプロット位置 "
         "`(n+0.12)/(n-rank+0.44)` に置いた値。青線は同じ20値にLモーメント法で当てはめた"
         "定常GEV分布の再現水準、薄青の帯は20値を復元抽出して2,000回再推定したブートストラップの"
-        "95%区間。星は推定に使っていない2026年の事例値で、横線はその再現期間の95%区間"
+        "95%区間。星は推定に使っていない2026年8月13～15日の事例値で、横線はその再現期間の95%区間"
         "（右端の矢印は上限が∞）。"
         "横軸は推定再現期間まで対数軸を延ばした。"
         "GEV形状母数 ξ は (a) −0.183、(b) −0.140。20年の標本から長い再現期間へ外挿した点推定であり、"
@@ -225,11 +219,9 @@ def main() -> None:
     with OUTPUT.with_suffix(".csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
         writer.writeheader()
-        writer.writerows(sorted(rows, key=lambda row: (row["cell"] != "target", row["event"])))
-    for title, (xi, august_period, september_period) in zip(
-        ("target", "south neighbor"), summaries, strict=True
-    ):
-        print(f"{title}: xi={xi:.6f}, August={august_period:.1f}, September={september_period:.1f}")
+        writer.writerows(rows)
+    for title, (xi, august_period) in zip(("target", "south neighbor"), summaries, strict=True):
+        print(f"{title}: xi={xi:.6f}, August={august_period:.1f}")
     for row in rows:
         print(
             f"{row['cell']} {row['event']}: upper={row['upper_bound_mm']:.1f} mm, "
